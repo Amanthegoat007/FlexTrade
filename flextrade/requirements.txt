@@ -1,0 +1,14 @@
+pandas>=2.0
+numpy
+lightgbm
+scikit-learn
+holidays
+pyarrow
+openpyxl
+requests
+beautifulsoup4
+lxml
+pulp
+plotly
+streamlit>=1.49
+matplotlib

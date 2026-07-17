@@ -1,0 +1,3 @@
+train  MAPE  6.19%   RMSE   441.8 Rs/MWh   corr 0.983
+val    MAPE 30.36%   RMSE  1372.3 Rs/MWh   corr 0.953
+test   MAPE 22.59%   RMSE  1626.2 Rs/MWh   corr 0.919
