@@ -1,3 +1,3 @@
-train  MAPE  2.19%   RMSE  111.8 MW   R2 0.9926
-val    MAPE  4.70%   RMSE  337.5 MW   R2 0.9307
-test   MAPE  4.98%   RMSE  261.5 MW   R2 0.9567
+train  MAPE  2.51%   RMSE  144.9 MW   R2 0.9876
+val    MAPE  4.64%   RMSE  330.2 MW   R2 0.9337
+test   MAPE  4.33%   RMSE  235.6 MW   R2 0.9648

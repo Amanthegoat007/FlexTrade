@@ -1,0 +1,38 @@
+probabilistic load forecast -- Delhi, 15-min blocks
+train 132,630 | val 17,525 | test 17,369
+test window 2025-12-02 -> 2026-06-02
+
+per-quantile (test):
+          pinball   coverage   nominal
+  P05     27.5 MW       4.8%        5%
+  P10     39.0 MW       8.3%       10%
+  P50     85.7 MW      24.4%       50%
+  P90     58.0 MW      64.0%       90%
+  P95     41.7 MW      74.9%       95%
+
+interval coverage (raw -> symmetric CQR -> asymmetric CQR):
+  P10-P90 (nominal 80%)
+      raw          55.6%  width    364 MW
+      symmetric    82.4%  width    611 MW  [+/-124 MW]
+      asymmetric   84.2%  width    605 MW  [-91 / +150 MW]  <- served
+  P05-P95 (nominal 90%)
+      raw          70.1%  width    540 MW
+      symmetric    91.2%  width    874 MW  [+/-167 MW]
+      asymmetric   92.6%  width    873 MW  [-131 / +202 MW]  <- served
+
+operational reading:
+  P50 point error (MAPE)             4.33%
+  P50 signed bias                    +104 MW (actual exceeds P50 on 75.6% of blocks)
+  NOTE: the median under-forecasts. Delhi load grew through the
+  test window and a quantile fitted on older history sits below it.
+  This matters for DSM in one direction only -- under-scheduling is
+  what draws deviation charges -- so it is corrected by the conformal
+  margin above rather than left for the operator to discover.
+  80% band width, mean                605 MW (15.6% of load)
+  blocks where P50 lands inside the CERC DSM +/-12% band   96.0%
+  blocks where our whole 80% band fits inside it             93.0%
+
+The second number is the one a DISCOM buys: it is the share of the day
+we can promise a schedule with quantified confidence rather than a
+single number and a hope. CQR coverage assumes exchangeability, which
+a time series violates -- this is calibrated in practice, not proven.

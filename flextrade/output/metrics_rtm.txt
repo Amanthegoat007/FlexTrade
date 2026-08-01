@@ -1,0 +1,66 @@
+RTM model -- horizon=intraday  (lead 6 blocks = 90 min; today's DAM + recent RTM known)
+train 25,258 | val 2,880 | test 5,170   test window 2026-05-25 -> 2026-07-24
+
+               WAPE    sMAPE      MAE     RMSE    corr  even.WAPE
+model        26.60%    36.6%    1101    1587   0.877     25.78%
+dam_flat     32.76%    41.2%    1356    2296   0.798     27.81%
+dam_ratio    33.00%    40.7%    1366    2217   0.795     28.60%
+persist      30.32%    43.7%    1255    2091   0.781     25.77%
+
+spread (RTM - DAM) vs the dam anchor, the trading signal:
+  model        direction  76.6%   spread MAE Rs 1,101/MWh
+  dam_ratio    direction  60.2%   spread MAE Rs 1,366/MWh
+  persist      direction  71.0%   spread MAE Rs 1,255/MWh
+  coin flip    direction  50.0%   (blocks scored: 3,987 of 5,170 with |spread| > Rs 100)
+
+CHAMPION (picked on validation): model   val WAPE 24.01%  ->  served test WAPE 26.60%, direction 76.6%
+best on test would have been: model (26.60%)  <- selection agreed
+model vs incumbent (dam_ratio): +19.4% relative
+WAPE is the headline, not MAPE: RTM clears at Rs 0 on real blocks (1st pct Rs 23),
+so a per-block percentage divides by near-zero and reports nonsense. MAE in Rs/MWh is the
+other honest read -- compare it to the Rs 2,151/MWh standard deviation of the spread itself.
+
+RTM model -- horizon=sameday  (today's DAM known, no RTM session near the block yet)
+train 25,258 | val 2,880 | test 5,180   test window 2026-05-25 -> 2026-07-24
+
+               WAPE    sMAPE      MAE     RMSE    corr  even.WAPE
+model        34.73%    42.0%    1442    2058   0.794     34.91%
+dam_flat     32.60%    41.1%    1353    2293   0.799     27.81%
+dam_ratio    32.85%    40.7%    1364    2215   0.796     28.60%
+persist      33.23%    47.3%    1379    2281   0.741     32.92%
+
+spread (RTM - DAM) vs the dam anchor, the trading signal:
+  model        direction  70.6%   spread MAE Rs 1,442/MWh
+  dam_ratio    direction  60.2%   spread MAE Rs 1,364/MWh
+  persist      direction  65.2%   spread MAE Rs 1,379/MWh
+  coin flip    direction  50.0%   (blocks scored: 3,987 of 5,180 with |spread| > Rs 100)
+
+CHAMPION (picked on validation): persist   val WAPE 25.06%  ->  served test WAPE 33.23%, direction 65.2%
+best on test would have been: dam_flat (32.60%)  <- we do NOT switch to it; that would be test leakage
+model vs incumbent (dam_ratio): -5.7% relative
+WAPE is the headline, not MAPE: RTM clears at Rs 0 on real blocks (1st pct Rs 23),
+so a per-block percentage divides by near-zero and reports nonsense. MAE in Rs/MWh is the
+other honest read -- compare it to the Rs 2,150/MWh standard deviation of the spread itself.
+
+RTM model -- horizon=dayahead  (lags >= 1 day only; tomorrow's DAM has not cleared)
+train 25,258 | val 2,880 | test 5,180   test window 2026-05-25 -> 2026-07-24
+
+               WAPE    sMAPE      MAE     RMSE    corr  even.WAPE
+model        33.95%    42.1%    1409    1993   0.797     32.86%
+damhat_flat   38.25%    47.5%    1588    2462   0.744     30.81%
+damhat_ratio   38.28%    46.7%    1589    2398   0.740     31.39%
+persist      33.23%    47.3%    1379    2281   0.741     32.92%
+dam_oracle   32.60%    41.1%    1353    2293   0.799     27.81%
+
+spread (RTM - DAM) vs the damhat anchor, the trading signal:
+  model        direction  73.4%   spread MAE Rs 1,453/MWh
+  damhat_ratio direction  60.2%   spread MAE Rs 1,365/MWh
+  persist      direction  63.8%   spread MAE Rs 1,561/MWh
+  coin flip    direction  50.0%   (blocks scored: 3,987 of 5,180 with |spread| > Rs 100)
+
+CHAMPION (picked on validation): persist   val WAPE 25.06%  ->  served test WAPE 33.23%, direction 63.8%
+best on test would have been: persist (33.23%)  <- selection agreed
+model vs incumbent (damhat_ratio): +11.3% relative
+WAPE is the headline, not MAPE: RTM clears at Rs 0 on real blocks (1st pct Rs 23),
+so a per-block percentage divides by near-zero and reports nonsense. MAE in Rs/MWh is the
+other honest read -- compare it to the Rs 2,150/MWh standard deviation of the spread itself.

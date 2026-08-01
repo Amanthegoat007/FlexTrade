@@ -1,0 +1,24 @@
+{
+  "margins_mw": {
+    "0.1-0.9": {
+      "lo": 91.1,
+      "hi": 149.7,
+      "symmetric": 123.7
+    },
+    "0.05-0.95": {
+      "lo": 130.9,
+      "hi": 202.2,
+      "symmetric": 166.6
+    }
+  },
+  "quantiles": [
+    0.05,
+    0.1,
+    0.5,
+    0.9,
+    0.95
+  ],
+  "calibration_n": 17525,
+  "calibration_from": "2025-06-02",
+  "calibration_to": "2025-12-02"
+}

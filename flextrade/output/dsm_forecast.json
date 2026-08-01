@@ -1,0 +1,138 @@
+{
+  "exposure": {
+    "day": "2026-08-02",
+    "profile": "CERC_2024",
+    "seller": "buyer",
+    "technology": "general",
+    "blocks": 96,
+    "n_scenarios": 60,
+    "entity_peak_mw": 200.0,
+    "schedule_mwh": 4162.309852427803,
+    "expected_dsm_rs": -52636.71324025556,
+    "expected_payable_rs": 13535.992332088606,
+    "p90_payable_rs": 0.0,
+    "worst_payable_rs": 803096.8003253418,
+    "p90_dsm_rs": 0.0,
+    "p10_dsm_rs": -210526.77709718762,
+    "worst_scenario_rs": 803096.8003253418,
+    "best_scenario_rs": -1214832.7034477433,
+    "expected_blocks_outside_band": 11.983333333333333,
+    "expected_pct_outside_band": 12.482638888888888,
+    "normal_rate_mean_rs_mwh": 3297.606263734158,
+    "rtm_basis": "DAM proxy (RTM model unavailable)",
+    "scenario_basis": "60 whole-day forecast-error curves sampled from the load model's 6-month held-out window (day shape preserved)",
+    "worst_scenarios": [
+      {
+        "error_day": "2026-03-04",
+        "net_dsm_rs": 803096.8003253418,
+        "payable_rs": 803096.8003253418,
+        "blocks_outside_band": 71,
+        "mae_mw": 29.96056794990288
+      },
+      {
+        "error_day": "2026-02-08",
+        "net_dsm_rs": -6074.90502623785,
+        "payable_rs": 9062.739599974648,
+        "blocks_outside_band": 9,
+        "mae_mw": 5.438639351788862
+      },
+      {
+        "error_day": "2026-02-20",
+        "net_dsm_rs": 0.0,
+        "payable_rs": 0.0,
+        "blocks_outside_band": 0,
+        "mae_mw": 3.5165559776738906
+      },
+      {
+        "error_day": "2025-12-19",
+        "net_dsm_rs": -11845.093223854848,
+        "payable_rs": 0.0,
+        "blocks_outside_band": 13,
+        "mae_mw": 8.369765003731324
+      },
+      {
+        "error_day": "2026-02-07",
+        "net_dsm_rs": -66880.87917150177,
+        "payable_rs": 0.0,
+        "blocks_outside_band": 20,
+        "mae_mw": 7.587191271212041
+      }
+    ]
+  },
+  "bias_sensitivity": {
+    "day": "2026-08-02",
+    "profile": "CERC_2024",
+    "curve": [
+      {
+        "bias_pct": -4,
+        "expected_payable_rs": 8305.559332406423,
+        "p90_payable_rs": 0.0,
+        "expected_dsm_rs": -182871.6492415445,
+        "pct_outside_band": 33.57638888888889
+      },
+      {
+        "bias_pct": -3,
+        "expected_payable_rs": 9392.472190679711,
+        "p90_payable_rs": 0.0,
+        "expected_dsm_rs": -137918.80536034453,
+        "pct_outside_band": 26.38888888888889
+      },
+      {
+        "bias_pct": -2,
+        "expected_payable_rs": 10633.767455518588,
+        "p90_payable_rs": 0.0,
+        "expected_dsm_rs": -102453.56423915757,
+        "pct_outside_band": 20.416666666666668
+      },
+      {
+        "bias_pct": -1,
+        "expected_payable_rs": 12043.890866740645,
+        "p90_payable_rs": 0.0,
+        "expected_dsm_rs": -74767.21977843148,
+        "pct_outside_band": 15.625
+      },
+      {
+        "bias_pct": 0,
+        "expected_payable_rs": 13535.992332088606,
+        "p90_payable_rs": 0.0,
+        "expected_dsm_rs": -52636.71324025556,
+        "pct_outside_band": 12.482638888888888
+      },
+      {
+        "bias_pct": 1,
+        "expected_payable_rs": 15151.825637257785,
+        "p90_payable_rs": 0.0,
+        "expected_dsm_rs": -35142.97580271393,
+        "pct_outside_band": 10.052083333333334
+      },
+      {
+        "bias_pct": 2,
+        "expected_payable_rs": 16918.754139868997,
+        "p90_payable_rs": 0.0,
+        "expected_dsm_rs": -21769.591803681073,
+        "pct_outside_band": 7.552083333333333
+      },
+      {
+        "bias_pct": 3,
+        "expected_payable_rs": 18843.425128948194,
+        "p90_payable_rs": 119.05353415352964,
+        "expected_dsm_rs": -11219.942575690651,
+        "pct_outside_band": 6.284722222222222
+      },
+      {
+        "bias_pct": 4,
+        "expected_payable_rs": 21257.523716958578,
+        "p90_payable_rs": 2556.324369984136,
+        "expected_dsm_rs": -2231.2972167819507,
+        "pct_outside_band": 5.46875
+      }
+    ],
+    "unconstrained_argmin_pct": -4,
+    "argmin_at_boundary": true,
+    "objective": "expected payable DSM charge (credits not netted)",
+    "p50_schedule_payable_rs": 13535.992332088606,
+    "p50_pct_outside_band": 12.482638888888888,
+    "recommendation": null,
+    "recommendation_withheld_because": "the minimum sits at the edge of the sweep: the implemented general-seller Normal Rate credits favourable deviation without the caps the real regulation applies, so any optimum would be an artifact of a missing rule rather than a real saving"
+  }
+}

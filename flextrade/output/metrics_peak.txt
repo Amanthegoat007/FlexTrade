@@ -1,0 +1,25 @@
+day-ahead peak forecast -- Delhi
+train 1,421 days | val 183 | test 183
+test window 2025-12-02 -> 2026-06-02
+
+PEAK MAGNITUDE (MW):
+  (model = raw + +99 MW bias correction fitted on validation)
+                          MAE     MAPE     bias   p90 err
+  model                  173    3.51%     +69      373
+  model_uncorrected      222    4.42%    +168      455
+  blockfc                272    5.29%    +231      517
+  persist_d2             302    5.99%     +22      637
+  sameweekday            543   10.10%     +99     1382
+
+PEAK TIMING (hour of day):
+                   exact    +/-1h    +/-2h    MAE h
+  model            64.5%    80.9%    82.0%    1.40
+  blockfc          52.5%    78.1%    81.4%    1.72
+  persist_d2       45.9%    71.0%    72.1%    2.42
+  sameweekday      52.5%    73.8%    75.4%    2.08
+
+  probability output: an 80% window needs 2.0 hours on average and actually contains the peak 80.9% of the time
+  (a flat guess over 24 hours would need 19.2 hours for the same 80%)
+
+best magnitude: model (MAE 173 MW)
+best timing:    model (+/-1h 80.9%)

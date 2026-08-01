@@ -33,6 +33,13 @@ CREATE TABLE IF NOT EXISTS re_weather (
 CREATE TABLE IF NOT EXISTS rtm_price (
     ts TEXT PRIMARY KEY, purchase_bid_mw REAL, sell_bid_mw REAL,
     mcv_mw REAL, sched_mw REAL, mcp_rs_mwh REAL, fetched_at TEXT);
+CREATE TABLE IF NOT EXISTS frequency (
+    ts TEXT PRIMARY KEY, frequency_hz REAL, fetched_at TEXT);
+CREATE TABLE IF NOT EXISTS gdam_price (
+    ts TEXT PRIMARY KEY, purchase_bid_mw REAL, sell_bid_mw REAL,
+    mcv_mw REAL, sched_mw REAL, mcp_rs_mwh REAL,
+    sell_hydro_mw REAL, sell_wind_mw REAL, sell_other_re_mw REAL,
+    fetched_at TEXT);
 CREATE TABLE IF NOT EXISTS fetch_log (
     source TEXT, at TEXT, ok INTEGER, note TEXT);
 """

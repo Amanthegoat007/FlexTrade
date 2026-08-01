@@ -1,0 +1,20 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- Node / web ---
+node_modules/
+flextrade-web/client/dist/
+flextrade-web/client/dist-static/
+.netlify/
+
+# --- runtime artifacts (regenerated every pipeline run) ---
+flextrade/logs/
+flextrade/output/web/
+*.log
+
+# --- scratch ---
+.DS_Store
+Thumbs.db

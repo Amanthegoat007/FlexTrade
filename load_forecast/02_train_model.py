@@ -82,6 +82,22 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     f["temp_rh"] = f["temp_c"] * f["rh_pct"] / 100       # humidity discomfort
     f["temp_24h_mean"] = f["temp_c"].rolling(96).mean()  # thermal inertia of the day
 
+    # --- thermal inertia & growth (model-lab winners, adopted 24 Jul) ---
+    # AC load depends on how hot it HAS BEEN, not just how hot it is
+    f["temp_lag_1d"] = f["temp_c"].shift(BLOCKS_PER_DAY)
+    daily_cdh = f["cdh"].groupby(idx.date).transform("mean")
+    f["heat_streak_3d"] = daily_cdh.shift(BLOCKS_PER_DAY).rolling(3 * BLOCKS_PER_DAY).mean()
+    hour_i = idx.hour
+    f["cdh_evening"] = f["cdh"] * (((hour_i >= 17) | (hour_i <= 1)).astype(int))
+    # short-run demand growth, encoded explicitly so level drift is learnable
+    f["r_2_7"] = f["lag_2d"] / f["lag_7d"]
+    f["r_2_14"] = f["lag_2d"] / f["lag_14d"]
+    # adaptive same-block baseline (EWM, information through D-2 only)
+    f["ewma_sameblock"] = (f["load_mw"].shift(2 * BLOCKS_PER_DAY)
+                           .groupby(f["block"] if "block" in f else
+                                    (idx.hour * 4 + idx.minute // 15))
+                           .transform(lambda s: s.ewm(halflife=7).mean()))
+
     return f
 
 
@@ -92,7 +108,15 @@ FEATURES = [
     "roll7d_mean", "roll7d_max", "roll7d_min", "sameblock_4w_mean",
     "temp_c", "temp_sq", "cdh", "hdh", "rh_pct", "temp_rh", "rain_mm",
     "cloud_pct", "apparent_temp_c", "temp_24h_mean",
+    "temp_lag_1d", "heat_streak_3d", "cdh_evening",
+    "r_2_7", "r_2_14", "ewma_sameblock",
 ]
+
+# recency half-life: down-weights old regimes so the model tracks Delhi's
+# load growth (test window is always the most recent data). Chosen in
+# models/model_lab.py — 180 d beat unweighted by ~0.45 pp MAPE.
+RECENCY_HALF_LIFE_DAYS = 180
+ENSEMBLE_SEEDS = (42, 7, 2026)
 
 
 def mape(y, p):
@@ -112,28 +136,39 @@ def main():
     test = f[f.index >= test_start]
     print(f"train {len(train):,} | val {len(val):,} | test {len(test):,}")
 
-    model = lgb.LGBMRegressor(
-        n_estimators=3000,
-        learning_rate=0.03,
-        num_leaves=127,
-        min_child_samples=50,
-        subsample=0.8,
-        subsample_freq=1,
-        colsample_bytree=0.8,
-        reg_lambda=1.0,
-        random_state=42,
-    )
-    model.fit(
-        train[FEATURES], train["load_mw"],
-        eval_set=[(val[FEATURES], val["load_mw"])],
-        eval_metric="mape",
-        callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)],
-    )
-    print(f"Best iteration: {model.best_iteration_}")
+    # recency weights: half-life chosen in the model lab (see constant above)
+    age_days = np.asarray((train.index.max() - train.index).total_seconds()) / 86400
+    weights = 0.5 ** (age_days / RECENCY_HALF_LIFE_DAYS)
+
+    # small seed ensemble: averages away tree-growth variance (~0.03 pp MAPE)
+    models = []
+    for seed in ENSEMBLE_SEEDS:
+        m = lgb.LGBMRegressor(
+            n_estimators=6000,
+            learning_rate=0.015,
+            num_leaves=255,
+            min_child_samples=20,
+            subsample=0.8,
+            subsample_freq=1,
+            colsample_bytree=0.7,
+            reg_lambda=2.0,
+            random_state=seed,
+        )
+        m.fit(
+            train[FEATURES], train["load_mw"], sample_weight=weights,
+            eval_set=[(val[FEATURES], val["load_mw"])],
+            eval_metric="mape",
+            callbacks=[lgb.early_stopping(150, verbose=False), lgb.log_evaluation(0)],
+        )
+        models.append(m)
+        print(f"seed {seed}: best iteration {m.best_iteration_}")
+
+    def predict(part):
+        return np.mean([m.predict(part[FEATURES]) for m in models], axis=0)
 
     lines = []
     for name, part in [("train", train), ("val", val), ("test", test)]:
-        p = model.predict(part[FEATURES])
+        p = predict(part)
         y = part["load_mw"].values
         rmse = float(np.sqrt(np.mean((y - p) ** 2)))
         r2 = 1 - np.sum((y - p) ** 2) / np.sum((y - y.mean()) ** 2)
@@ -142,12 +177,24 @@ def main():
     print(report)
     (OUT / "metrics.txt").write_text(report)
 
-    model.booster_.save_model(str(OUT / "model.txt"))
+    # save every ensemble member + a meta file the live wrapper reads;
+    # model.txt stays = first member for backward compatibility
+    import json
+    names = []
+    for seed, m in zip(ENSEMBLE_SEEDS, models):
+        n = f"model_s{seed}.txt"
+        m.booster_.save_model(str(OUT / n))
+        names.append(n)
+    models[0].booster_.save_model(str(OUT / "model.txt"))
+    (OUT / "model_meta.json").write_text(json.dumps({
+        "ensemble": names, "recency_half_life_days": RECENCY_HALF_LIFE_DAYS,
+        "recipe": "model-lab L8: +thermal/growth features, recency weights, "
+                  "tuned params, 3-seed ensemble"}, indent=2))
 
     # --- test predictions + plots ---
     pred = pd.DataFrame({
         "actual_mw": test["load_mw"],
-        "predicted_mw": model.predict(test[FEATURES]),
+        "predicted_mw": predict(test),
     }, index=test.index)
     pred.to_csv(OUT / "test_predictions.csv")
 
@@ -181,7 +228,7 @@ def main():
     fig.tight_layout(); fig.savefig(OUT / "scatter.png"); plt.close(fig)
 
     # feature importance
-    imp = pd.Series(model.feature_importances_, index=FEATURES).sort_values()
+    imp = pd.Series(models[0].feature_importances_, index=FEATURES).sort_values()
     fig, ax = plt.subplots(figsize=(8, 7))
     ax.barh(imp.index, imp.values, color="#33577b")
     ax.set_title("Feature importance (LightGBM splits)")

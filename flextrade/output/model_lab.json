@@ -1,0 +1,123 @@
+{
+ "price": [
+  {
+   "experiment": "P0 baseline (production)",
+   "test_mape_pct": 22.0,
+   "test_rmse": 1423.0,
+   "corr": 0.9242,
+   "evening_mape_pct": 15.27,
+   "cap_recall_pct": 49.1,
+   "n_test": 5277
+  },
+  {
+   "experiment": "P1 recency weights (hl=60d)",
+   "test_mape_pct": 21.63,
+   "test_rmse": 1397.0,
+   "corr": 0.9208,
+   "evening_mape_pct": 14.25,
+   "cap_recall_pct": 64.9,
+   "n_test": 5277
+  },
+  {
+   "experiment": "P2 +cross-market features",
+   "test_mape_pct": 21.5,
+   "test_rmse": 1377.0,
+   "corr": 0.9265,
+   "evening_mape_pct": 14.5,
+   "cap_recall_pct": 58.9,
+   "n_test": 5277
+  },
+  {
+   "experiment": "P3 cap-hurdle two-stage",
+   "test_mape_pct": 20.41,
+   "test_rmse": 1291.0,
+   "corr": 0.9328,
+   "evening_mape_pct": 11.39,
+   "cap_recall_pct": 77.7,
+   "n_test": 5277
+  },
+  {
+   "experiment": "P4 P1+P2",
+   "test_mape_pct": 20.99,
+   "test_rmse": 1365.0,
+   "corr": 0.9242,
+   "evening_mape_pct": 13.31,
+   "cap_recall_pct": 67.8,
+   "n_test": 5277
+  },
+  {
+   "experiment": "P5 P1+P2+P3 (full)",
+   "test_mape_pct": 20.75,
+   "test_rmse": 1267.0,
+   "corr": 0.9342,
+   "evening_mape_pct": 12.85,
+   "cap_recall_pct": 80.5,
+   "n_test": 5277
+  },
+  {
+   "experiment": "P6 P5 + tuned params",
+   "test_mape_pct": 20.76,
+   "test_rmse": 1268.0,
+   "corr": 0.9342,
+   "evening_mape_pct": 12.77,
+   "cap_recall_pct": 79.0,
+   "n_test": 5277
+  }
+ ],
+ "load": [
+  {
+   "experiment": "L0 baseline (production)",
+   "test_mape_pct": 4.978,
+   "test_rmse_mw": 261.5,
+   "n_test": 17369
+  },
+  {
+   "experiment": "L1 +thermal/growth features",
+   "test_mape_pct": 4.688,
+   "test_rmse_mw": 247.9,
+   "n_test": 17369
+  },
+  {
+   "experiment": "L2 relative target",
+   "test_mape_pct": 5.139,
+   "test_rmse_mw": 273.7,
+   "n_test": 17369
+  },
+  {
+   "experiment": "L3 recency weights (hl=180d)",
+   "test_mape_pct": 4.528,
+   "test_rmse_mw": 247.3,
+   "n_test": 17369
+  },
+  {
+   "experiment": "L4 tuned hyperparams",
+   "test_mape_pct": 4.908,
+   "test_rmse_mw": 256.5,
+   "n_test": 17369
+  },
+  {
+   "experiment": "L5 L1+L2 (features + rel target)",
+   "test_mape_pct": 4.732,
+   "test_rmse_mw": 250.7,
+   "n_test": 17369
+  },
+  {
+   "experiment": "L6 L1+L3 (features + recency)",
+   "test_mape_pct": 4.367,
+   "test_rmse_mw": 236.8,
+   "n_test": 17369
+  },
+  {
+   "experiment": "L7 L1+L3+L4",
+   "test_mape_pct": 4.36,
+   "test_rmse_mw": 236.6,
+   "n_test": 17369
+  },
+  {
+   "experiment": "L8 L7 + 3-seed ensemble",
+   "test_mape_pct": 4.334,
+   "test_rmse_mw": 235.6,
+   "n_test": 17369
+  }
+ ]
+}

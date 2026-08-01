@@ -1,0 +1,9 @@
+{
+  "ensemble": [
+    "model_s42.txt",
+    "model_s7.txt",
+    "model_s2026.txt"
+  ],
+  "recency_half_life_days": 180,
+  "recipe": "model-lab L8: +thermal/growth features, recency weights, tuned params, 3-seed ensemble"
+}

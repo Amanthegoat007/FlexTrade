@@ -1,0 +1,15 @@
+{
+  "name": "flextrade-server",
+  "version": "1.0.0",
+  "description": "FlexTrade API server - reads the Python quant stack's SQLite store and JSON exports; never re-implements a scraper",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "express": "^4.21.2"
+  }
+}

@@ -27,8 +27,17 @@ FEATURES = lf.FEATURES
 build_features = lf.build_features
 
 
-def _booster() -> lgb.Booster:
-    return lgb.Booster(model_file=str(LF_DIR / "output" / "model.txt"))
+def _boosters() -> list[lgb.Booster]:
+    """The trained model — a seed ensemble if model_meta.json lists one
+    (model-lab recipe), else the single legacy model.txt."""
+    import json
+    meta = LF_DIR / "output" / "model_meta.json"
+    if meta.exists():
+        names = json.loads(meta.read_text()).get("ensemble", [])
+        files = [LF_DIR / "output" / n for n in names]
+        if files and all(f.exists() for f in files):
+            return [lgb.Booster(model_file=str(f)) for f in files]
+    return [lgb.Booster(model_file=str(LF_DIR / "output" / "model.txt"))]
 
 
 def _history_frame(target: date) -> pd.DataFrame:
@@ -70,8 +79,11 @@ def forecast_day(target: date | None = None) -> pd.DataFrame:
     missing = missing[missing > 0]
     if len(missing):
         raise ValueError(f"missing features for {target}: {missing.to_dict()}")
+    import numpy as np
     out = pd.DataFrame(index=day.index)
-    out["forecast_load_mw"] = _booster().predict(day[FEATURES])
+    boosters = _boosters()
+    out["forecast_load_mw"] = np.mean(
+        [b.predict(day[FEATURES]) for b in boosters], axis=0)
     return out
 
 

@@ -132,6 +132,105 @@ def fetch_prev_run(past_days: int = 3) -> pd.DataFrame:
     return df.set_index("ts").sort_index()
 
 
+def _tech_split(d: date) -> pd.DataFrame:
+    """Per-block schedule/actual/naive, kept separate for solar and wind
+    (they carry different DSM bands and X-factor glide paths post-2024,
+    so must be settled independently, not as one lumped 'RE' block)."""
+    raw = fetch_prev_run(past_days=5)
+
+    def twin_from(ghi_col, wind_col, temp_col):
+        wx = raw[[ghi_col, wind_col, temp_col]].copy()
+        wx.columns = ["ghi", "wind100_kmh", "temp_c"]
+        return _twin(wx)
+
+    actual = twin_from("shortwave_radiation", "wind_speed_100m", "temperature_2m")
+    schedule = twin_from("shortwave_radiation_previous_day1",
+                         "wind_speed_100m_previous_day1",
+                         "temperature_2m_previous_day1")
+    naive = actual.shift(96)
+
+    day_mask = actual.index.date == d
+    out = pd.DataFrame({
+        "solar_schedule_mw": schedule["solar_mw"][day_mask],
+        "solar_actual_mw": actual["solar_mw"][day_mask],
+        "solar_naive_mw": naive["solar_mw"][day_mask],
+        "wind_schedule_mw": schedule["wind_mw"][day_mask],
+        "wind_actual_mw": actual["wind_mw"][day_mask],
+        "wind_naive_mw": naive["wind_mw"][day_mask],
+    }).dropna()
+    out["schedule_mw"] = out["solar_schedule_mw"] + out["wind_schedule_mw"]
+    out["actual_mw"] = out["solar_actual_mw"] + out["wind_actual_mw"]
+    out["naive_mw"] = out["solar_naive_mw"] + out["wind_naive_mw"]
+    return out
+
+
+def dsm_comparison_cerc(d: date | None = None, profile: str = "CERC_2024",
+                        freq_linked: bool = False
+                        ) -> tuple[pd.DataFrame, dict, dict]:
+    """DSM comparison priced with a real CERC regulation profile
+    (models/dsm.py — CERC_2022 or CERC_2024, see that module's docstring
+    for what is and isn't independently verified).
+
+    Solar and wind are settled SEPARATELY, each against its own
+    technology-specific band (and, in the 2024 profile, its own X-factor
+    glide path), then summed — a mixed 50/50 portfolio must not be
+    settled as if it were one uniform technology.
+
+    Frequency is used only for days we genuinely sampled it (SLDC serves
+    no frequency history) and only if freq_linked=True; otherwise the
+    engine defaults to the confirmed, non-frequency-linked behaviour and
+    the summary reports `frequency_observed`.
+    """
+    from ingest import iex, sldc, store
+    from . import dsm
+
+    d = d or (date.today() - timedelta(days=1))
+    split = _tech_split(d)
+    if split.empty:
+        return split, {}, {}
+
+    prices = store.read("dam_price")
+    dam = prices[prices.index.date == d]["mcp_rs_mwh"]
+    if not len(dam):
+        dam = iex.fetch_dam(d)["mcp_rs_mwh"]
+    rtm_all = store.read("rtm_price")
+    rtm = rtm_all[rtm_all.index.date == d]["mcp_rs_mwh"] if len(rtm_all) else pd.Series(dtype=float)
+    if not len(rtm):
+        rtm = dam  # RTM history not stored for that day; NR falls back to DAM
+
+    freq = sldc.frequency_for_day(d)
+    observed = len(freq) > 0
+    freq_input = freq.resample("15min").mean() if observed else 50.00
+
+    def settle_portfolio(schedule_col: str, actual_col: str) -> pd.DataFrame:
+        parts = []
+        for tech, cap, sched_c, act_c in [
+            ("solar", SolarPlant().capacity_mw,
+             f"solar_{schedule_col}", f"solar_{actual_col}"),
+            ("wind", WindFarm().capacity_mw,
+             f"wind_{schedule_col}", f"wind_{actual_col}"),
+        ]:
+            s = dsm.settle(profile, actual_mw=split[act_c], scheduled_mw=split[sched_c],
+                           frequency_hz=freq_input, dam_price=dam, rtm_price=rtm,
+                           available_capacity_mw=cap, seller="ws", technology=tech,
+                           freq_linked=freq_linked, settlement_date=d)
+            parts.append(s)
+        combined = parts[0].copy()
+        combined["charge_rs"] = sum(p["charge_rs"] for p in parts)
+        combined["deviation_mw"] = sum(p["deviation_mw"] for p in parts)
+        combined["outside_band"] = parts[0]["outside_band"] | parts[1]["outside_band"]
+        combined.attrs.update(parts[0].attrs)
+        return combined
+
+    flex = settle_portfolio("schedule_mw", "actual_mw")
+    naive = settle_portfolio("naive_mw", "actual_mw")
+    sf, sn = dsm.summarize(flex), dsm.summarize(naive)
+    for s in (sf, sn):
+        s["frequency_observed"] = observed
+        s["profile"] = profile
+    return split, sf, sn
+
+
 def dsm_comparison(d: date | None = None) -> tuple[pd.DataFrame, dict, dict]:
     """FlexTrade day-ahead forecast vs naive persistence for day `d`
     (default: yesterday). Schedule = twin(previous-day NWP run); actual =

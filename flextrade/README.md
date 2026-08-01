@@ -10,7 +10,10 @@ serving **all five customer segments** on **live grid & market data**.
 |---|---|
 | DAM price forecasting + bidding optimization (§2) | `models/price_model.py`, `optimize/dispatch.py` |
 | RTM market intelligence (§2) | `ingest/iex.py::get_rtm_today`, Trader tab |
-| Renewable scheduling / DSM minimization (§2, RE developers §4) | `models/re_model.py` — digital twin + DSM calculator on real NWP forecast error |
+| Green DAM — separate green price discovery (§2) | `ingest/iex.py::get_gdam_today`, GDAM−DAM spread panel |
+| Renewable scheduling / DSM minimization (§2, RE developers §4) | `models/re_model.py` — digital twin on real NWP forecast error, settled by `models/dsm.py` (versioned CERC 2022 + 2024 regulation profiles, see below) |
+| **DSM Module** (full `FlexTrade_DSM_Feature.pdf` spec) | `models/dsm.py` (Normal Rate Calculator, Frequency & Band Classifier), `models/dsm_alerts.py` (Alerts & Revision Engine), `re_model.dsm_comparison_cerc` (Deviation Data Ingestion + Settlement Reconciliation vs live prices) |
+| Multi-state expansion (beyond Delhi) | `ingest/states.py` — Northern Region live snapshot (8 states, zero extra scraping) + state adapter registry |
 | BESS dispatch optimization (§4) | LP optimizer + bid sheet, BESS tab |
 | DISCOM / C&I demand intelligence (§4) | Load model (4.98% MAPE) + predictive peak windows |
 | **Forecast-as-a-Service** (§3.3, primary stream) | `api.py` — REST API, tiered keys (Starter/Professional/Enterprise per §8), metered usage |
@@ -65,7 +68,29 @@ streamlit run app.py
 
 # Forecast-as-a-Service API  →  http://localhost:8100/docs
 uvicorn api:app --port 8100
+
+# sample the real BRPL battery (leave running; SLDC publishes no history)
+python poll_bess.py 120
+
+# head-to-head vs the real asset, once telemetry has accumulated
+python validate/bess_validate.py
 ```
+
+## Validation against a real asset
+
+Delhi SLDC publishes live telemetry (MW, kVAr, **State of Charge**) for the
+**BRPL Kilokari BESS** — India's first utility-scale standalone BESS,
+20 MW / 40 MWh, COD April 2025, approved under Section 63. That is the same
+spec as our optimizer's reference asset, so `validate/bess_validate.py`
+compares, block by block and at the *same* actual IEX prices, what the real
+battery earned against what FlexTrade's schedule would have earned.
+
+`poll_bess.py` samples it into `bess_telemetry` (SLDC exposes only the
+instantaneous state, so history has to be built by sampling).
+
+Caveat carried in the code and the UI: BRPL's battery is a regulated DISCOM
+asset dispatched for grid support, not pure arbitrage — the gap sizes the
+unmonetised arbitrage opportunity, it is not a judgement of the operator.
 
 (The load model itself is trained in `../load_forecast/` — see that README.)
 

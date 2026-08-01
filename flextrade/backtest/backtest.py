@@ -31,9 +31,8 @@ OUT.mkdir(exist_ok=True)
 def run(test_days: int = 60, bess: Bess = Bess()) -> pd.DataFrame:
     f = price_model.build_features(price_model._table())
     f = f.dropna(subset=price_model.FEATURES + ["mcp_rs_mwh"])
-    booster = lgb.Booster(model_file=str(price_model.MODEL_PATH))
-    # model is trained on log(MCP)
-    f["mcp_pred"] = np.clip(np.exp(booster.predict(f[price_model.FEATURES])), 0, 10000)
+    # same cap-hurdle predictor production uses (see price_model.predict_hurdle)
+    f["mcp_pred"] = price_model.predict_hurdle(f)
 
     split = f.index.max().normalize() - pd.Timedelta(days=test_days)
     test = f[f.index >= split]

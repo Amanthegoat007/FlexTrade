@@ -1,0 +1,13 @@
+risk backtest: 2026-05-25 -> 2026-07-24 (55 days), 24 scenarios/day
+BESS 20 MW / 40 MWh
+
+strategy                       total Rs   mean/day   worst day    P10 day       std  capture
+point forecast LP            14,286,342    259,752     149,250    211,887    39,366   92.6%
+stochastic (lam=0)           13,577,443    246,863      94,886    193,300    47,964   88.0%
+CVaR risk-aware (lam=0.5)    13,542,011    246,218     106,131    188,764    47,711   87.7%
+
+CVaR vs point forecast:
+  mean/day      -5.2%
+  worst day    -28.9%  (Rs 149,250 -> Rs 106,131)
+  P10 day      -10.9%
+  volatility   +21.2%
