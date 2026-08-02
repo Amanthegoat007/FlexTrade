@@ -17,6 +17,18 @@ from pathlib import Path
 
 import pandas as pd
 
+# Never let a console encoding kill a pipeline run. Windows defaults stdout to
+# cp1252, which cannot encode the arrows and rupee signs these modules print;
+# _run_pipeline.cmd sets PYTHONIOENCODING=utf-8 but anything else invoking this
+# (a shell, a cron, a human) does not, and the run then dies at stage
+# "refresh_live" on a PRINT STATEMENT with every fetch already succeeded.
+# Observed exactly that: UnicodeEncodeError on '→'.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ingest import iex, sldc, states, store, weather
 from models import load_model, price_model
