@@ -75,7 +75,10 @@ def state_weather(code: str, start: str, end: str) -> pd.DataFrame:
                     start_date=start, end_date=end,
                     daily="temperature_2m_max,temperature_2m_min,"
                           "temperature_2m_mean,precipitation_sum,"
-                          "shortwave_radiation_sum,wind_speed_10m_max",
+                          "shortwave_radiation_sum,wind_speed_10m_max,"
+                          # hub height: wind power goes as the CUBE of the speed
+                          # a turbine actually sees, ~100 m, not the 10 m screen
+                          "wind_speed_100m_max,wind_speed_100m_mean",
                     timezone="Asia/Kolkata"),
         timeout=60)
     r.raise_for_status()
@@ -92,9 +95,11 @@ def cache_weather(codes: list[str], start: str, end: str) -> pd.DataFrame:
             code TEXT, day TEXT, temperature_2m_max REAL,
             temperature_2m_min REAL, temperature_2m_mean REAL,
             precipitation_sum REAL, shortwave_radiation_sum REAL,
-            wind_speed_10m_max REAL, PRIMARY KEY (code, day))""")
+            wind_speed_10m_max REAL, wind_speed_100m_max REAL,
+            wind_speed_100m_mean REAL, PRIMARY KEY (code, day))""")
         try:
-            have = pd.read_sql("SELECT DISTINCT code FROM state_weather_daily", con)
+            have = pd.read_sql("SELECT DISTINCT code FROM state_weather_daily "
+                               "WHERE wind_speed_100m_mean IS NOT NULL", con)
             have = set(have["code"])
         except Exception:
             have = set()

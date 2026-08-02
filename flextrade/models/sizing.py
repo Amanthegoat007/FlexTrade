@@ -10,7 +10,7 @@ Method
    calculator interactive with zero server compute.
 2. Per day over the trailing year of ACTUAL IEX DAM prices: solve the
    dispatch LP with perfect foresight, then multiply by FlexTrade's
-   MEASURED capture ratio (93.8%, 55-day walk-forward vs actuals) to get
+   MEASURED capture ratio (read live from the backtest, not frozen) to get
    the achievable number. That keeps the projection tied to a measured
    capability instead of an assumed one.
 3. Degradation at the physics-calibrated rate shared with the dispatch LP,
@@ -29,6 +29,7 @@ Honest caveats carried into the output:
   - capex defaults are indicative (Rs 1.3-1.8 Cr/MWh tender range).
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -44,7 +45,25 @@ OUT = HERE.parent / "output"
 CACHE = OUT / "sizing_curves.json"
 
 DURATIONS_H = (1.0, 2.0, 4.0)
-CAPTURE_RATIO = 0.938          # measured, 55-day walk-forward (backtest)
+def _measured_capture() -> float:
+    """Read the capture ratio out of the live backtest instead of freezing it.
+
+    It was hardcoded at 0.938 and had already drifted to 0.947 after the
+    degradation recalibration — the same failure mode that put a stale RMSE and
+    a 61-day backtest on the Methodology page. A bankability model quoting a
+    stale capability is the worst place for it.
+    """
+    try:
+        txt = (OUT / "backtest_summary.txt").read_text(encoding="utf-8-sig")
+        m = re.search(r"capture ratio\s*:\s*([\d.]+)%", txt)
+        if m:
+            return float(m.group(1)) / 100.0
+    except Exception:
+        pass
+    return 0.947
+
+
+CAPTURE_RATIO = _measured_capture()
 # Single source of truth: the same calibrated rate the dispatch LP charges.
 # This module used to carry its own hardcoded 843.0 — a stale snapshot of the
 # same fixed point — so sizing quoted one degradation cost while the optimizer
