@@ -51,7 +51,7 @@ Undocumented but real JSON controllers behind `vidyutpravah.in`:
 |---|---|---|---|
 | `/PXDashboard/BindTopStatisticsFromJS` | POST | national demand (GW), yesterday's demand, frequency, UI rate | ✅ 1,512 B |
 | `/PXDashboard/BindCurrentDateTimeForJson` | POST | the current **15-minute block** stamp | ✅ `{"FromTime":"15:00","ToTime":"15:15","CurrentDate":"02 AUG 2026"}` |
-| `/PXDashboard/BindStatePricesFromJS` | POST | per-state price (IDs `MHA_Price`, `DL_Price`, … exist in the DOM) | ⚠️ returns `[]` — feed appears idle |
+| `/PXDashboard/BindStatePricesFromJS` | POST | **STATE-WISE AREA CLEARING PRICE, 35 areas** | ✅ **now serving** (was `[]` on 2 Aug, live 3 Aug — intermittent, so poll it) |
 | `/PXDashboard/GetShortageDetailDataForJson` | POST | shortage detail | ❌ 500 on every parameter tried |
 
 **Value:** the block stamp confirms MoP publishes at 15-min granularity, and the
@@ -64,9 +64,10 @@ single most valuable field on this page for us.
 endpoints, including `psp_energy.php`, `psp_peak.php`,
 `installed_capacity_statewise.php`, `power_generation.php`, `renewable_energy.php`.
 
-**Status: documented, keyless, and currently returning `504 Gateway Timeout`** on
-every endpoint, from a warmed session with a 120 s timeout. This is an upstream
-outage, not a block on us. It is the best-quality state-wise structural data
+**Status: still down after a week.** On 2 Aug every endpoint returned
+`504 Gateway Timeout`; on 3 Aug they return HTTP 200 with the body
+`Connection failed: Connection timed out` — their application reaching its own
+database. This is an upstream outage, not a block on us. It is the best-quality state-wise structural data
 India publishes and should be retried on a schedule rather than written off.
 
 ---
@@ -77,7 +78,7 @@ India publishes and should be retried on a schedule rather than written off.
 |---|---|---|
 | **WRLDC** `OnlinestateTest1.aspx/GetRealTimeData_state_Wise` | POST `{date:'YYYY-MM-DD'}`, 6 date formats | Endpoint **parses** dates (HTTP 500 on `dd-mm-yyyy`, 200 on ISO) but returns **0 rows** for every date tried. Page appears deprecated. |
 | **WRLDC** `onlinestate.aspx` | direct GET | ASP.NET WebForms + UpdatePanel; data is not in the initial HTML, needs a ViewState postback. Scrapeable with effort. |
-| **IEX area prices** `/day-ahead-market/area-price` | same params as the working market-snapshot scraper | 200 but **81 KB SPA shell with zero data** — unlike market-snapshot, which server-renders 257 KB. Area prices are the one real route to a state-level price signal, so this is the highest-value blocked item. |
+| **IEX area prices** `/day-ahead-market/area-price` | same params as the working market-snapshot scraper | 200 but **81 KB SPA shell with zero data**. Superseded: Vidyut PRAVAH now serves the same signal (see §2), so this is no longer blocking. |
 | **Grid-India** `grid-india.in` | GET | SSL handshake failure |
 | **India-WRIS reservoir** `indiawris.gov.in/Dataset/Reservoir` | POST, contract fully mapped by walking its own 400s | **Contract known, data not served.** It is a Spring endpoint taking `stateName`, `districtName`, `agencyName`, `startdate`, `enddate`, `download`, `page`, `size` as **query params** (not a JSON body). With all of them supplied it returns `{"statusCode":500,"message":"Data NOT Fetch"}` for every state and date range tried — probably needs a real `districtName` rather than an empty one. Worth one more pass with a district list, since reservoir storage is the single feature most likely to fix Himachal. |
 
@@ -127,3 +128,42 @@ The defensible claim today is: *one state proven at 15-minute resolution, a
 national screening layer at daily resolution, and a running 15-minute collector
 that turns the second into the first over the next quarter.* That is a real moat —
 nobody else is accruing this panel — and it is honest about what is not ready.
+
+
+---
+
+## 6. Status at 3 Aug 2026
+
+### Collecting every 15 minutes (poll_states.py, one process, isolated failures)
+
+| Feed | What it gives | Rows |
+|---|---|---|
+| **MERIT** | 23 states: demand / own gen / import | 31,557 |
+| **UP SLDC** | demand, schedule, **drawal, signed deviation**, intra-state gen | accruing |
+| **Karnataka SLDC** | demand, drawal, frequency (MERIT cross-checked) | accruing |
+| **Vidyut PRAVAH** | **35-area clearing price** — state-level price when the market splits | accruing |
+
+The area-price feed is the one that changes what can be *sold*. IEX prints one
+national MCP, so "forecast the price in state X" had no target. When
+transmission congests the market splits and each area clears separately —
+exactly the hours a battery is worth most. We now capture every block and can
+measure how often it happens, which is what sizes the opportunity.
+
+### What is still missing, in priority order
+
+1. **Congestion depth.** The area-price feed is snapshot-only — no date
+   parameter, so there is no history to backfill. Everything from here is
+   accrued. Until a few weeks pass we cannot say how often the market splits.
+2. **CEA API** — down for a week (their DB, not their web tier). Retry on a
+   schedule; it is the best state-wise structural data India publishes.
+3. **Reservoir storage** — India-WRIS contract is mapped but returns
+   `Data NOT Fetch`; needs a valid district list. Still the single feature most
+   likely to fix Himachal.
+4. **Coal stock and unit outages** — not yet attempted. These are the
+   supply-side shocks the price model cannot see, and the residual there is
+   supply-driven, not demand-driven.
+5. **MH / PB / WB SLDCs** — reachable but server-rendered ASP.NET; need
+   ViewState-aware scraping. Their MERIT numbers already disagreed with a naive
+   scrape by 2.6-60x, so this is not a shortcut worth taking carelessly.
+6. **Realised RE at plant level** — MERIT gives daily state totals, which is
+   what models/re_state.py now uses. Plant-level, intraday RE remains absent.
