@@ -29,11 +29,19 @@ export default function Renewables() {
               profitable schedule revision before the gate closes." />
       <h2 className="section-title">Deviation Settlement Mechanism — settlement day {dsm?.settlement_day}</h2>
       <div className="note info" style={{ marginBottom: 12 }}>
-        Reference portfolio: 50 MW solar + 50 MW wind digital twin (Delhi NCR).
-        The schedule is what the weather model forecast <i>one day earlier</i>
-        (Open-Meteo previous-runs API) — real day-ahead forecast error, nothing simulated.
-        Solar and wind are settled separately: they carry different tolerance bands
-        and, from FY28, different X-factor glide paths.
+        Reference portfolio: 50 MW solar + 50 MW wind <b>digital twin</b> (Delhi NCR).
+        Be clear about which half is real. The <b>weather error is real</b>: the
+        schedule is what the weather model forecast <i>one day earlier</i>
+        (Open-Meteo previous-runs API) and the settlement uses the analysis that
+        followed, so the deviation is genuine day-ahead NWP error, not noise we
+        invented. The <b>plant is not real</b> — both schedule and "actual"
+        generation are produced by the same deterministic physics twin, because we
+        hold <b>zero rows of measured RE generation</b>. That means this prices the
+        deviation a weather miss causes, and excludes everything a real plant adds:
+        outages, soiling, curtailment and inverter clipping, which in practice
+        dominate. Read it as a lower bound on exposure. Solar and wind are settled
+        separately — different tolerance bands, and different X-factor glide paths
+        from FY28.
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>

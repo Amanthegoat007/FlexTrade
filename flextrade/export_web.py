@@ -743,10 +743,30 @@ def export_forecasts():
             band = _records(load_quantile.forecast_day())
         except Exception as e:
             print(f"  (load band skipped: {e})")
+        # Parse the served band's coverage and width out of the report so the
+        # UI stops hardcoding them. Same failure mode that put a stale 262 MW
+        # RMSE and a 61-day backtest on the Methodology page.
+        import re as _re
+        qt = _metrics_text("metrics_load_quantile.txt") or ""
+        served = {}
+        m = _re.search(r"asymmetric\s+([\d.]+)%\s+width\s+([\d,]+)\s*MW", qt)
+        if m:
+            served["coverage_pct"] = float(m.group(1))
+            served["width_mw"] = float(m.group(2).replace(",", ""))
+        m = _re.search(r"raw\s+([\d.]+)%\s+width", qt)
+        if m:
+            served["raw_coverage_pct"] = float(m.group(1))
+        m = _re.search(r"P50 signed bias\s+([+-]?[\d.]+)\s*MW", qt)
+        if m:
+            served["p50_bias_mw"] = float(m.group(1))
+        m = _re.search(r"exceeds P50 on ([\d.]+)% of blocks", qt)
+        if m:
+            served["actual_above_p50_pct"] = float(m.group(1))
         out["load_quantiles"] = {
             "conformal": conf,
+            "served": served,
             "tomorrow": band,
-            "metrics_text": _metrics_text("metrics_load_quantile.txt"),
+            "metrics_text": qt,
         }
     except Exception as e:
         out["load_quantiles"] = {"error": f"not trained: {e}"}

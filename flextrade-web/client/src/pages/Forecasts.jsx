@@ -127,13 +127,16 @@ function BandPanel({ band }) {
     ...r, t: String(r.ts || "").slice(11, 16),
   }));
   const m = band.conformal?.margins_mw?.["0.1-0.9"] || {};
+  const sv = band.served || {};   // parsed from the metrics report, not hardcoded
 
   return (
     <>
       <div className="grid4">
-        <Stat label="Band coverage" value="84.2%" hint="nominal 80% · measured on held-out data"
-          infoText="Share of held-out blocks where actual load fell inside the served P10–P90 band. Raw quantile regression achieved only 55.6%; conformal calibration fixed it." />
-        <Stat label="Mean band width" value="605" unit="MW" hint="15.6% of load" />
+        <Stat label="Band coverage" value={sv.coverage_pct ? `${sv.coverage_pct}%` : "—"}
+          hint="nominal 80% · measured on held-out data"
+          infoText={`Share of held-out blocks where actual load fell inside the served P10–P90 band. Raw quantile regression achieved only ${sv.raw_coverage_pct ?? "—"}%; conformal calibration fixed it.`} />
+        <Stat label="Mean band width" value={sv.width_mw?.toLocaleString("en-IN") ?? "—"} unit="MW"
+          hint="the number a customer pays for in procured reserve" />
         <Stat label="Conformal margin" value={`−${m.lo ?? "—"} / +${m.hi ?? "—"}`} unit="MW"
           infoText="Asymmetric on purpose: the median under-forecasts, so nearly all the missed coverage escapes through the upper bound. Widening both sides equally would buy no coverage and cost band width." />
         <Stat label="Calibrated on" value={band.conformal?.calibration_n?.toLocaleString("en-IN") || "—"}

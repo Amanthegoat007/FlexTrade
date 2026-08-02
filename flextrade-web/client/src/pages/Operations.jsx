@@ -27,22 +27,25 @@ function RtmSection({ rtm }) {
         that flexibility: the LP below re-optimizes the remaining blocks of{" "}
         <b>{rtm.delivery_day}</b> (as of {rtm.asof}), starting from the SoC implied by the
         committed plan, and must hand tomorrow the planned end-of-day position. Basis:{" "}
-        {rtm.dam_basis}. Price expectation: {rtm.blocks_actual_rtm} blocks at actual cleared
-        RTM prices, {rtm.blocks_projected} projected from today's DAM curve scaled by an{" "}
-        <b>hour-of-day</b> RTM/DAM ratio ({rtm.ratio_basis}).
+        {rtm.dam_basis}. Price expectation: <b>{rtm.blocks_actual_rtm} blocks at actual
+        cleared RTM prices</b>, {rtm.blocks_projected} from the trained RTM model
+        ({rtm.ratio_basis}).
       </p>
-      {rtm.ratio_dispersion?.n_blocks && (
-        <div className="note" style={{ marginBottom: 12 }}>
-          <b>How firm is that projection?</b> Measured over{" "}
-          {rtm.ratio_dispersion.n_blocks.toLocaleString("en-IN")} paired blocks, the
-          RTM/DAM ratio has a median of {rtm.ratio_dispersion.median} but a 5th–95th
-          percentile of <b>{rtm.ratio_dispersion.p05}–{rtm.ratio_dispersion.p95}</b>, and its
-          hourly median swings {rtm.ratio_dispersion.hour_min}–{rtm.ratio_dispersion.hour_max}.
-          RTM clears above DAM in ~43% of blocks, so this is a calibrated
-          <i> expectation</i>, not a forecast — an RTM price model is the next build,
-          and the uplift below should be read with that spread in mind.
-        </div>
-      )}
+      <div className="note info" style={{ marginBottom: 12 }}>
+        <b>This used to be a ratio; it is now a model.</b> Until the RTM backfill it
+        projected unpriced blocks by scaling today's DAM curve by an hour-of-day
+        RTM/DAM ratio — a poor description of reality, since that ratio's 5th–95th
+        percentile spans 0.36–1.79 and RTM clears <i>above</i> DAM in 43% of blocks.
+        A trained intraday model replaced it on a held-out 60 days:{" "}
+        <b>WAPE {rtm.model_wape_pct != null ? `${rtm.model_wape_pct.toFixed(1)}%` : "26.6%"} vs 33.0%</b>{" "}
+        for the ratio, and — the number that decides whether to trade —{" "}
+        <b>spread direction {rtm.model_direction_pct != null ? `${rtm.model_direction_pct.toFixed(1)}%` : "76.6%"} vs 60.2%</b>.
+        {rtm.sameday_champion && rtm.sameday_champion !== "model" && (
+          <> Blocks too far out for the intraday model fall back to the{" "}
+          <span className="mono">{rtm.sameday_champion}</span> champion, which won its
+          horizon on validation — we serve whichever actually wins, not whichever we built.</>
+        )}
+      </div>
       <div className="grid4">
         <Stat label="Expected RTM uplift" info="RTM, P_L" value={fmtINR(rtm.expected_rtm_uplift_rs)}
           hint="incremental, on top of DAM revenue" />
@@ -108,15 +111,26 @@ function DegradationSection({ deg }) {
         cost is nonconvex, so the LP iterates a fixed point on a calibrated flat rate.
         Shown for {deg.day} actual DAM prices.
       </p>
+      <div className="note info" style={{ marginBottom: 12 }}>
+        <b>This module is no longer a demonstration — it sets the production number.</b>{" "}
+        Until 2 Aug 2026 the dispatch LP charged a flat ₹200/MWh proxy that nobody had
+        derived, while this model sat beside it computing ~4× more and being used only
+        for display. We ran the fixed point over 30 sampled days of real DAM prices
+        (median ₹806/MWh, p10–p90 ₹724–₹831) and moved the LP's cost to <b>₹800/MWh</b>.
+        Annualised revenue fell ₹9.61 Cr → ₹8.23 Cr and we publish the lower figure;
+        capture ratio <i>rose</i> 93.8% → 94.7%, which is the tell that it is a better
+        model rather than a haircut. The comparison below is therefore against what we
+        used to do, not against what we still do.
+      </div>
       <div className="grid4">
         <Stat label="True cycling cost" info="DoD, LFP, FCE" value={`₹${Math.round(deg.converged_rate_rs_mwh).toLocaleString("en-IN")}`}
-          unit="/MWh" hint="converged rate — vs the old ₹200 proxy" />
+          unit="/MWh" hint="today's exact rainflow rate · the LP is calibrated to ₹800" />
         <Stat label="Physics cost of the day" info="FCE" value={fmtINR(deg.physics_cost_rs)}
           hint={`${deg.full_cycle_equivalents} full-cycle equivalents`} />
         <Stat label="Net P&L (physics-aware)" info="P_L" value={fmtINR(deg.net_rs)}
           hint="gross arbitrage − true degradation" />
-        <Stat label="Uplift vs ₹200 proxy" value={fmtINR(uplift)}
-          hint={`proxy schedule cycled ${deg.proxy200?.fce} FCE`} />
+        <Stat label="Uplift vs the retired ₹200 proxy" value={fmtINR(uplift)}
+          hint={`that proxy cycled ${deg.proxy200?.fce} FCE — more trading, less profit`} />
       </div>
       <div className="grid2">
         <Card title="Marginal cost vs depth of discharge"
