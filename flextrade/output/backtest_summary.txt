@@ -1,7 +1,7 @@
-backtest window: 2026-05-25 -> 2026-07-24 (55 days)
-BESS: 20 MW / 40 MWh, eff 90%, degradation Rs 200.0/MWh
-LP on forecast : Rs   14,480,935  (~Rs 9.61 Cr/yr)
-greedy baseline: Rs   11,233,254
-perfect bound  : Rs   15,433,828
-capture ratio  : 93.8% of perfect foresight
-mean daily price MAPE: 20.4%
+backtest window: 2026-06-02 -> 2026-08-01 (53 days)
+BESS: 20 MW / 40 MWh, eff 90%, degradation Rs 800.0/MWh
+LP on forecast : Rs   11,952,128  (~Rs 8.23 Cr/yr)
+greedy baseline: Rs    7,910,084
+perfect bound  : Rs   12,623,273
+capture ratio  : 94.7% of perfect foresight
+mean daily price MAPE: 18.9%

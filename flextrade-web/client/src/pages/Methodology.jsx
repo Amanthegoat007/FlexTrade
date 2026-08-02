@@ -387,7 +387,7 @@ max  (1−λ)·E[profit] + λ·CVaR₉₀(profit)      CVaR via Rockafellar–Ur
         <b> A finding we report honestly:</b> when the point model was weaker,
         risk-aware bidding lifted the P10 day +5.4%; after the cap-hurdle upgrade
         sharpened the point forecast (evening MAPE 15.3%→11.4%), the same
-        scenario ensemble now <i>subtracts</i> value (mean −5.2% over 55 days) —
+        scenario ensemble now <i>subtracts</i> value (mean −8.9% under corrected degradation economics) —
         its scenarios are drawn from quantile models that haven't received the
         hurdle treatment, so they inject noise around a better centre. Default
         is therefore the point-forecast LP (λ=0); the CVaR machinery stays
@@ -395,6 +395,68 @@ max  (1−λ)·E[profit] + λ·CVaR₉₀(profit)      CVaR via Rockafellar–Ur
         would make it earn its keep. Measuring your own feature into the
         off-position is the difference between engineering and a demo.
       </p>
+
+      <h2>What the optimizer is told a cycle costs — and why that was wrong</h2>
+      <p>
+        The dispatch LP maximises <span className="mono">Σ price·(dis − ch) −
+        c_deg·(ch + dis)</span>. Everything turns on <span className="mono">c_deg</span>,
+        the marginal cost of putting a MWh through the battery, and until 2 Aug 2026
+        it was <b>₹200/MWh — a round number nobody had ever derived</b>, sitting in
+        the objective while our own physics module computed something four times
+        larger and was used only for reporting.
+      </p>
+      <Card sub="Calibrated by running the rainflow degradation fixed point over 30 sampled days of real DAM prices from the last 90.">
+        <table className="data">
+          <thead><tr><th>Quantity</th><th className="num">Value</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td>Physics rate, median</td><td className="num"><b>₹806/MWh</b></td>
+              <td>rainflow on the SoC path + LFP Wöhler curve L(d)=L₁₀₀·d⁻ᵏ</td></tr>
+            <tr><td>Physics rate, p10–p90</td><td className="num">₹724 – ₹831</td>
+              <td>tight enough that a constant is defensible</td></tr>
+            <tr><td>Adopted in the LP</td><td className="num"><b>₹800/MWh</b></td>
+              <td>rounded median</td></tr>
+            <tr><td>Previous proxy</td><td className="num" style={{ color: "var(--critical)" }}>₹200/MWh</td>
+              <td>undocumented; <b>4.0× understated</b></td></tr>
+          </tbody>
+        </table>
+      </Card>
+      <p style={{ marginTop: 10 }}>
+        Under-charging degradation does not merely overstate profit — <b>it changes
+        the schedule</b>, because the LP takes marginal spreads that are not worth
+        taking. Over the last 60 days the correction moves cycling from 457 to
+        412 EFC/yr; on the higher-spread May–July window the ₹200 schedule reached
+        ~657 EFC/yr, <i>outside</i> a typical 365–550 warranty envelope. So the proxy
+        did not always breach the envelope, but it was always willing to, and part of
+        the revenue it reported was paid for in warranty rather than earned.
+      </p>
+      <div className="note info">
+        <b>No cycle cap was added, deliberately.</b> The obvious fix is a hard
+        constraint on equivalent full cycles. It is the wrong fix: the over-cycling
+        was never a missing constraint, it was a mispriced input. Charge cycling what
+        it actually costs and the optimizer self-regulates — which is both simpler and
+        correct, because a cap would still be making bad trades right up to the limit.
+      </div>
+      <Card title="What the correction cost us, stated plainly" style={{ marginTop: 12 }}
+        sub="Same forecasts, same optimizer, same prices — only c_deg changed.">
+        <table className="data">
+          <thead><tr><th>Headline</th><th className="num">At ₹200</th><th className="num">At ₹800</th></tr></thead>
+          <tbody>
+            <tr><td>Backtest annualised</td><td className="num">₹9.61 Cr/yr</td>
+              <td className="num"><b>₹8.23 Cr/yr</b></td></tr>
+            <tr><td>Capture ratio</td><td className="num">93.8%</td>
+              <td className="num"><b>94.7%</b></td></tr>
+            <tr><td>Cycling (60-day window)</td><td className="num">457 EFC/yr</td>
+              <td className="num"><b>412 EFC/yr</b></td></tr>
+          </tbody>
+        </table>
+        <div className="note" style={{ marginTop: 10 }}>
+          Revenue falls ~14% and we publish the lower number, because it is the one
+          that survives a technical due-diligence review. Capture ratio <i>improves</i>,
+          which is the tell that this is a better model rather than a haircut: against
+          a correctly-priced perfect-foresight bound, our schedule is closer to optimal
+          than it was against a mispriced one.
+        </div>
+      </Card>
 
       <h2>KPI glossary — every number, what it means, why it exists</h2>
       <Card>
@@ -604,7 +666,7 @@ max  (1−λ)·E[profit] + λ·CVaR₉₀(profit)      CVaR via Rockafellar–Ur
         <li>DSM engine follows the CERC 2024 <i>structure</i> with cited provenance per rule; final gazetted slabs and SERC variants need counsel review before real settlement.</li>
         <li>Ancillary-services prices have no public feed (NLDC-internal) — the NR's third component is proxied by RTM and flagged in every result.</li>
         <li>Annualising a summer backtest window overweights cap-price evenings — quote the walk-forward window's own number as the hard result. Measured across the full year, mean daily DAM spread is ₹7,771 vs ₹8,785 in the backtest window, so the annualised figure is ~12% optimistic; ~₹8.5 Cr/yr is the defensible number.</li>
-        <li><b>The dispatch LP has no cycle cap.</b> It carries only a ₹200/MWh throughput cost, which is ~5% of the ₹3,652/MWh captured — far too soft to bind. The backtest therefore runs ~1.8 equivalent cycles/day ≈ 657 EFC/year, against the 365–550 EFC/yr a typical 2-hour warranty allows. The headline revenue is earned outside the envelope the Warranty Guard exists to protect; this is the most material open item in the stack.</li>
+        <li><b>Cycling is now priced, not capped — fixed 2 Aug 2026.</b> The LP previously charged a ₹200/MWh throughput cost that was ~4× below our own physics model, so it over-traded and the headline revenue was partly paid for in warranty. It now charges the calibrated ₹800/MWh and self-regulates to 412 EFC/yr, inside the 365–550 envelope. Cost of the correction: annualised revenue ₹9.61 Cr → ₹8.23 Cr. There is still no hard cycle cap, and deliberately so — see the section above.</li>
         <li>The day-ahead RTM model loses to persistence on the level (33.9% vs 33.2% WAPE) and is not served there — only the intraday model is promoted. It wins on spread direction at both horizons.</li>
         <li>The DSM exposure forecast prices a scheduled generator, not a DISCOM's drawal book: our settlement engine implements the general-seller band, and we could not verify a buyer profile's slabs. No "optimal schedule bias" is offered — the optimum sits at the edge of the sweep because the engine lacks the over-injection caps the real regulation carries, so any optimum would be an artifact of a missing rule rather than a real saving.</li>
         <li>There is <b>no realised RE generation data at all</b> — <span className="mono">re_weather</span> is forecast-only — so an RE developer's plant-level DSM exposure, the case with the strongest commercial pull, is not priced. An invented error distribution quoted in rupees would be worse than no feature.</li>

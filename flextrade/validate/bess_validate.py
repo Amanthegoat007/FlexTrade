@@ -42,7 +42,7 @@ BLOCK_H = 0.25
 # match the optimizer's asset to the real one
 REAL_BESS = Bess(power_mw=bess.RATED_POWER_MW,
                  energy_mwh=bess.RATED_ENERGY_MWH,
-                 round_trip_eff=0.90, degradation_rs_mwh=200.0)
+                 round_trip_eff=0.90)   # calibrated degradation from Bess default
 
 
 def actual_revenue(profile: pd.DataFrame, prices: pd.Series) -> pd.DataFrame:

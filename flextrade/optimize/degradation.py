@@ -165,6 +165,8 @@ def optimize_physical(prices: pd.Series, bess: Bess = Bess(),
             break
         rate = new_rate
 
+    # the Rs 200 flat proxy this module was built to discredit — kept as a
+    # comparison so the improvement stays visible after the default moved
     proxy_sched, proxy_gross, proxy_deg = solve(200.0)
     return {
         "schedule": sched,

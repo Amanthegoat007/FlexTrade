@@ -157,10 +157,18 @@ def replay(day: date, bess: Bess = Bess(), market: str = "dam") -> DayResult | N
 
     ordered = int((b["side"] != "-").sum())
     filled = int(b["filled"].sum())
+    # Expected must be NET of the same degradation charge the realised side
+    # carries, or "slippage" measures an accounting difference instead of an
+    # execution shortfall. (It briefly did: after the degradation rate was
+    # recalibrated, realised went net of Rs 800/MWh while expected stayed
+    # gross, and slippage read -31.7% for no trading reason at all.)
     expected = None
     if plan is not None and {"charge_mw", "discharge_mw", "forecast_mcp"} <= set(plan.columns):
-        expected = float(((plan["discharge_mw"] - plan["charge_mw"])
-                          * BLOCK_H * plan["forecast_mcp"]).sum())
+        gross = float(((plan["discharge_mw"] - plan["charge_mw"])
+                       * BLOCK_H * plan["forecast_mcp"]).sum())
+        planned_throughput = float(
+            (plan["charge_mw"] + plan["discharge_mw"]).sum() * BLOCK_H)
+        expected = gross - planned_throughput * bess.degradation_rs_mwh
 
     realised = float(b["cash_rs"].sum())
     # what a perfect executor would have made on the same day and same asset,

@@ -20,6 +20,32 @@ import pulp
 BLOCK_H = 0.25
 
 
+# Marginal cost of cycling the battery, Rs per MWh of throughput. This is the
+# single most consequential number in the objective and it was wrong: it sat at
+# a round Rs 200 "proxy" that nobody had ever derived, while our OWN physics
+# model (optimize/degradation.py — rainflow counting on the SoC path, LFP
+# Wohler curve L(d) = L100 * d^-kp, Rs 1.5 Cr/MWh capex, 70% attributed to
+# cycling) puts it near Rs 800.
+#
+# Calibrated 2 Aug 2026 by running the degradation fixed point over 30 sampled
+# days of real DAM prices from the last 90:
+#     median Rs 806/MWh   mean 791   p10 724   p90 831
+# A tight distribution, so a constant is defensible; 800 is the rounded median.
+#
+# Why this matters more than a 4x number usually would: under-charging
+# degradation does not just overstate profit, it changes the SCHEDULE — the LP
+# takes marginal spreads that are not actually worth taking. Measured over the
+# last 60 days of real DAM prices, the effect on cycling is 457 -> 412 EFC/yr
+# (both inside a 365-550 warranty on THIS window); on the higher-spread
+# May-July window the Rs 200 schedule reached ~657 EFC/yr, outside it. So the
+# proxy did not always breach the envelope, but it was always willing to, and
+# the revenue it reported was partly paid for in warranty rather than earned.
+#
+# Pricing it correctly makes the optimizer self-regulate instead of needing an
+# artificial cycle cap bolted on, which is why no such cap was added.
+DEGRADATION_RS_MWH = 800.0
+
+
 @dataclass
 class Bess:
     power_mw: float = 20.0
@@ -27,7 +53,7 @@ class Bess:
     round_trip_eff: float = 0.90
     soc0_frac: float = 0.5
     soc_min_frac: float = 0.05
-    degradation_rs_mwh: float = 200.0  # throughput cost proxy
+    degradation_rs_mwh: float = DEGRADATION_RS_MWH
 
 
 def optimize_dispatch(prices: pd.Series, bess: Bess = Bess(),
@@ -75,7 +101,7 @@ def optimize_dispatch(prices: pd.Series, bess: Bess = Bess(),
 
 
 def settle(schedule: pd.DataFrame, actual_prices: pd.Series,
-           degradation_rs_mwh: float = 200.0) -> float:
+           degradation_rs_mwh: float = DEGRADATION_RS_MWH) -> float:
     """P&L of an already-fixed schedule at actual (cleared) prices.
 
     If the schedule carries soc_end/soc0 attrs (greedy does), the change
@@ -124,13 +150,14 @@ def greedy_dispatch(prices: pd.Series, bess: Bess = Bess()) -> pd.DataFrame:
 
 # How far the price limit sits from the forecast. Raised 10% -> 15% on
 # 2 Aug 2026 against measured evidence from the issued-order ledger
-# (trade/book.py margin_sweep, 8 settled delivery days):
+# (trade/book.py margin_sweep, 8 settled delivery days, degradation charged at
+# the calibrated Rs 800/MWh):
 #
 #   margin   realised P&L   fill rate   undeliverable   EFC/yr
-#     10%     Rs 23.5 L       77.5%        34.8 MWh      409
-#     15%     Rs 25.3 L       82.5%        12.9 MWh      451
-#     30%     Rs 25.9 L       88.8%        12.9 MWh      501
-#     50%     Rs 26.6 L       98.8%         2.9 MWh      609  <- breaks warranty
+#     10%     Rs 19.2 L       77.5%        34.8 MWh      409
+#     15%     Rs 20.5 L       82.5%        12.9 MWh      451   <- chosen
+#     30%     Rs 20.6 L       88.8%        12.9 MWh      501
+#     50%     Rs 20.2 L       98.8%         2.9 MWh      609   breaks warranty
 #
 # The reasoning matters more than the constant. IEX DAM is a UNIFORM-PRICE
 # auction: a filled order settles at the market clearing price, never at our
@@ -140,12 +167,11 @@ def greedy_dispatch(prices: pd.Series, bess: Bess = Bess()) -> pd.DataFrame:
 # because the energy never arrives and every later SELL that depended on it
 # becomes undeliverable (34.8 MWh stranded at 10%, 12.9 MWh at 15%).
 #
-# 15% rather than the sweep's argmax of 30% on purpose: P&L is monotonic in the
-# margin up to the warranty limit, so the argmax is just the edge of whatever
-# range we happened to test, and 8 summer days cannot support a tuned constant.
-# 15% takes ~73% of the measured gain while staying far from the "fill at any
-# price" regime, whose tail risk — selling into a price crash the forecast
-# missed — this window never exercised.
+# Note the curve now TURNS DOWN at 50%. It did not before: with degradation
+# under-charged at Rs 200/MWh, P&L rose monotonically with the margin and the
+# only thing stopping "fill at any price" was the warranty. Once cycling costs
+# what it actually costs, filling indiscriminately stops paying on its own —
+# which is the same lesson as the degradation fix, arriving twice.
 BID_MARGIN = 0.15
 
 
