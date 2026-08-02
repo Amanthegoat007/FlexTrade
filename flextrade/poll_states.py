@@ -42,6 +42,20 @@ def _kptcl():
             f"(MERIT cross-check {s.get('crosscheck_pct')}%)")
 
 
+def _coal():
+    # daily report with a publication lag; cheap to re-check and it self-skips
+    from datetime import date, timedelta
+    from ingest import coal
+    for back in range(1, 5):
+        d = date.today() - timedelta(days=back)
+        df = coal.fetch(d)
+        if len(df):
+            coal.store_day(df)
+            return (f"{d} {len(df)} plants, "
+                    f"{df['days_of_stock'].median():.1f} median days of stock")
+    return "no report published in the last 4 days"
+
+
 def _area_price():
     from ingest import vidyutpravah
     s = vidyutpravah.poll()
@@ -54,6 +68,7 @@ SOURCES = [
     ("upsldc", _upsldc),        # UP: schedule/drawal/deviation, largest load
     ("kptcl", _kptcl),          # Karnataka: demand/drawal/frequency
     ("area_price", _area_price),  # state-wise clearing price when the market splits
+    ("coal", _coal),            # supply side: the strongest exogenous signal found
 ]
 
 

@@ -3,6 +3,6 @@
   "q_lo": 0.1,
   "q_hi": 0.9,
   "calibration_n": 2880,
-  "raw_coverage_pct": 82.5,
-  "conformal_coverage_pct": 82.5
+  "raw_coverage_pct": 93.8,
+  "conformal_coverage_pct": 93.8
 }

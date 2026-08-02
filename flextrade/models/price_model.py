@@ -34,6 +34,18 @@ FEATURES = [
     "pb_lag_1d", "sb_lag_1d", "bidgap_lag_1d",
     "load_lag_2d", "load_roll7d_mean",
     "temp_c", "cdh",
+    # --- supply side: the first non-demand driver this model has ever seen ---
+    # Measured over 190 overlapping days, national coal days-of-stock
+    # correlates -0.457 with the share of blocks that pin at the Rs 10,000 cap
+    # and -0.368 with the mean price. Thinnest quartile: 31.7% of blocks capped
+    # at Rs 5,146 mean. Fullest: 9.3% at Rs 3,969. For comparison, every
+    # demand-side day characteristic we tested (spread, volatility, cap share)
+    # correlated with P&L at +0.03 to -0.06. This is the signal.
+    #
+    # Lagged 3 days: CEA publishes the report for day D on D+1 or later, so at
+    # a 12:00 gate on D-1 for delivery D the newest report we can hold is
+    # around D-3. Coal stock moves slowly enough that the lag costs little.
+    "coal_days_of_stock", "coal_critical_pct", "coal_stock_trend_7d",
 ]
 
 
@@ -55,7 +67,27 @@ def _table() -> pd.DataFrame:
     temp = actual.combine_first(fcst).resample("15min").interpolate(limit=8)
 
     df = pd.concat([p, load.rename("load_mw"), temp.rename("temp_c")], axis=1)
-    return df.loc[p.index.min(): p.index.max()]
+    df = df.loc[p.index.min(): p.index.max()]
+
+    # --- coal position, broadcast from daily to every block of the day ---
+    try:
+        from ingest import coal
+        c = coal.daily_summary(1200)
+        if len(c):
+            c = c.set_index("day")[["days_of_stock", "critical_capacity_pct"]]
+            c = c.sort_index()
+            c["trend"] = c["days_of_stock"].diff(7)
+            # shift 3 days for publication lag, then forward-fill: the newest
+            # report a bidder can hold applies until the next one lands
+            c = c.shift(3, freq="D")
+            day = df.index.normalize()
+            for src, dst in (("days_of_stock", "coal_days_of_stock"),
+                             ("critical_capacity_pct", "coal_critical_pct"),
+                             ("trend", "coal_stock_trend_7d")):
+                df[dst] = pd.Series(day.map(c[src]), index=df.index).ffill()
+    except Exception as e:
+        print(f"  (coal features unavailable: {type(e).__name__}: {str(e)[:70]})")
+    return df
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
