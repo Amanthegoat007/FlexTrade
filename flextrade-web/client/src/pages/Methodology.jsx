@@ -396,6 +396,49 @@ max  (1−λ)·E[profit] + λ·CVaR₉₀(profit)      CVaR via Rockafellar–Ur
         off-position is the difference between engineering and a demo.
       </p>
 
+      <h2>Does better forecasting actually make more money?</h2>
+      <p>
+        It is the assumption the whole product rests on, so we measured it rather
+        than asserting it. The backtest stores per-day forecast error <i>and</i>
+        per-day P&amp;L, so the two can simply be correlated across 53 delivery days.
+      </p>
+      <Card sub="Days grouped into quartiles by that day's price-forecast error, then compared on what the optimizer actually earned.">
+        <table className="data">
+          <thead><tr>
+            <th>Forecast quality</th><th className="num">Price MAPE</th>
+            <th className="num">Capture ratio</th><th className="num">₹ lost vs perfect</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>best 25% of days</td><td className="num">9.0%</td>
+              <td className="num"><b>97.2%</b></td><td className="num">₹6,460</td></tr>
+            <tr><td>2nd quartile</td><td className="num">14.6%</td>
+              <td className="num">96.3%</td><td className="num">₹9,677</td></tr>
+            <tr><td>3rd quartile</td><td className="num">21.7%</td>
+              <td className="num">96.2%</td><td className="num">₹8,198</td></tr>
+            <tr><td>worst 25% of days</td><td className="num">31.1%</td>
+              <td className="num" style={{ color: "var(--critical)" }}>90.0%</td>
+              <td className="num" style={{ color: "var(--critical)" }}>₹26,794</td></tr>
+          </tbody>
+        </table>
+      </Card>
+      <p style={{ marginTop: 10 }}>
+        <b>Yes — but with sharp diminishing returns, and that changes where effort
+        should go.</b> The correlation is real (−0.36 between price MAPE and capture
+        ratio) and the tail is what costs: the worst quartile of forecast days loses
+        <b> 4× more</b> per day than the best. But across the whole window only
+        <b>₹6.71 lakh — 5.3% of the ceiling</b> — separates our schedule from one
+        built with <i>perfect knowledge of tomorrow's prices</i>.
+      </p>
+      <div className="note info">
+        <b>A perfect price forecast is worth about 5% more revenue. Correcting the
+        degradation price was worth 14%, and the bid-margin fix ~7%.</b> That is not
+        an argument for a worse forecast — it is an argument that at 94.7% capture,
+        the marginal rupee has moved from <i>prediction</i> to <i>execution and cost
+        modelling</i>. Chasing price MAPE from 20% to 15% would be the most
+        expensive way to earn the least. Reducing the <i>tail</i> of forecast error
+        on the worst days is still worth it; reducing the average is largely not.
+      </div>
+
       <h2>What the optimizer is told a cycle costs — and why that was wrong</h2>
       <p>
         The dispatch LP maximises <span className="mono">Σ price·(dis − ch) −

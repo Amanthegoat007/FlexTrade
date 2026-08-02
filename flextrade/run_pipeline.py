@@ -81,6 +81,15 @@ def refresh_live() -> dict:
     _, status["sldc_freq"] = sldc.get_frequency()
     # all-India + 23-state live position (MERIT, Ministry of Power)
     _, status["merit"] = states.get_india_snapshot()
+    # UP's own SLDC — the only state besides Delhi with a first-party feed, and
+    # the only one anywhere that publishes schedule/drawal/deviation. Non-fatal:
+    # it enriches the panel, it is not on the path to a bid sheet.
+    try:
+        from ingest import upsldc
+        snap = upsldc.poll()
+        status["upsldc"] = {"live": True, "asof": snap.get("source_updated")}
+    except Exception as e:
+        print(f"  upsldc  SKIPPED  {type(e).__name__}: {str(e)[:90]}")
     for k, v in status.items():
         print(f"  {k:8s} {'LIVE' if v['live'] else 'CACHED':6s} asof {v['asof']}")
 
