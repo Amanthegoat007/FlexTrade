@@ -112,6 +112,7 @@ app.get("/api/modules", sendJsonFile("modules"));
 app.get("/api/state-forecast", sendJsonFile("state_forecast"));
 app.get("/api/forecasts", sendJsonFile("forecasts"));
 app.get("/api/trade-book", sendJsonFile("trade_book"));
+app.get("/api/bankability", sendJsonFile("bankability"));
 
 app.get("/api/live", async (req, res) => {
   const f = path.join(WEB_JSON, "live.json");

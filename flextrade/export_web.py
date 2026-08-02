@@ -646,6 +646,15 @@ def export_bess():
     _dump("bess.json", out)
 
 
+def export_bankability():
+    """Project-finance model — DSCR, IRR, LCOS. What a lender reads."""
+    try:
+        from models import bankability
+        _dump("bankability.json", bankability.run())
+    except Exception as e:
+        _dump("bankability.json", {"error": f"{type(e).__name__}: {e}"})
+
+
 def export_trade_book():
     """The issued-order book, settled at prices that actually cleared.
 
@@ -843,6 +852,7 @@ if __name__ == "__main__":
         export_state_forecast()
         export_forecasts()
         export_trade_book()
+        export_bankability()
         export_sqlite_series()
         export_meta()
     else:
@@ -858,4 +868,5 @@ if __name__ == "__main__":
         export_state_forecast()
         export_forecasts()
         export_trade_book()
+        export_bankability()
         export_meta()  # re-dump so freshness reflects the fetches above
