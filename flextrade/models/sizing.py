@@ -13,7 +13,7 @@ Method
    MEASURED capture ratio (93.8%, 55-day walk-forward vs actuals) to get
    the achievable number. That keeps the projection tied to a measured
    capability instead of an assumed one.
-3. Degradation at the physics-calibrated rate (Rs 843/MWh throughput,
+3. Degradation at the physics-calibrated rate shared with the dispatch LP,
    rainflow/Wohler — see optimize/degradation.py), inside the LP so
    cycling depth is realistic, and reported as its own line.
 4. Bankability: lenders lend against pessimistic revenue. We bootstrap
@@ -45,7 +45,12 @@ CACHE = OUT / "sizing_curves.json"
 
 DURATIONS_H = (1.0, 2.0, 4.0)
 CAPTURE_RATIO = 0.938          # measured, 55-day walk-forward (backtest)
-DEGRADATION_RS_MWH = 843.0     # physics-calibrated (optimize/degradation.py)
+# Single source of truth: the same calibrated rate the dispatch LP charges.
+# This module used to carry its own hardcoded 843.0 — a stale snapshot of the
+# same fixed point — so sizing quoted one degradation cost while the optimizer
+# charged another. Two numbers for one physical quantity is how a bankability
+# model loses an auditor.
+from optimize.dispatch import DEGRADATION_RS_MWH  # noqa: E402
 CAPEX_RS_PER_MWH_DEFAULT = 1.5e7
 
 
