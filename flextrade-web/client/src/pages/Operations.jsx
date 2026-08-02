@@ -176,7 +176,9 @@ function CniSection({ cni }) {
         <Stat label="Demand-charge saving" infoText="Demand charge — C&I consumers pay for their PEAK demand (Rs/kVA/month) on top of energy. Cutting the peak with a battery cuts this line directly." value={fmtINR((b?.demand_rs ?? 0) - (o?.demand_rs ?? 0))}
           unit="/day" hint="₹250/kVA/month, daily share" />
         <Stat label="Degradation cost" value={fmtINR(cni.degradation_rs)} unit="/day"
-          hint="physics-calibrated ₹843/MWh — already netted out" />
+          hint={deg?.converged_rate_rs_mwh
+            ? `physics-calibrated ₹${Math.round(deg.converged_rate_rs_mwh).toLocaleString("en-IN")}/MWh — already netted out`
+            : "physics-calibrated rate — already netted out"} />
       </div>
       <Card title="Factory load vs grid draw"
         sub="the gap is the battery: charging in the off-peak rebate window, discharging into the process peak">

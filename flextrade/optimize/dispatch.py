@@ -122,7 +122,35 @@ def greedy_dispatch(prices: pd.Series, bess: Bess = Bess()) -> pd.DataFrame:
     return out
 
 
-def bid_sheet(schedule: pd.DataFrame, forecast_prices: pd.Series) -> pd.DataFrame:
+# How far the price limit sits from the forecast. Raised 10% -> 15% on
+# 2 Aug 2026 against measured evidence from the issued-order ledger
+# (trade/book.py margin_sweep, 8 settled delivery days):
+#
+#   margin   realised P&L   fill rate   undeliverable   EFC/yr
+#     10%     Rs 23.5 L       77.5%        34.8 MWh      409
+#     15%     Rs 25.3 L       82.5%        12.9 MWh      451
+#     30%     Rs 25.9 L       88.8%        12.9 MWh      501
+#     50%     Rs 26.6 L       98.8%         2.9 MWh      609  <- breaks warranty
+#
+# The reasoning matters more than the constant. IEX DAM is a UNIFORM-PRICE
+# auction: a filled order settles at the market clearing price, never at our
+# limit. Measured on 2026-07-31, we asked Rs 7,881 and were paid Rs 9,165. So
+# the limit is purely a FILL SWITCH — tightening it buys no price protection
+# whatsoever, it only causes misses. And a missed BUY is expensive twice over,
+# because the energy never arrives and every later SELL that depended on it
+# becomes undeliverable (34.8 MWh stranded at 10%, 12.9 MWh at 15%).
+#
+# 15% rather than the sweep's argmax of 30% on purpose: P&L is monotonic in the
+# margin up to the warranty limit, so the argmax is just the edge of whatever
+# range we happened to test, and 8 summer days cannot support a tuned constant.
+# 15% takes ~73% of the measured gain while staying far from the "fill at any
+# price" regime, whose tail risk — selling into a price crash the forecast
+# missed — this window never exercised.
+BID_MARGIN = 0.15
+
+
+def bid_sheet(schedule: pd.DataFrame, forecast_prices: pd.Series,
+              margin: float = BID_MARGIN) -> pd.DataFrame:
     """96-block DAM bid sheet: buy when charging, sell when discharging."""
     bids = pd.DataFrame(index=schedule.index)
     bids["block"] = range(1, len(bids) + 1)
@@ -131,8 +159,9 @@ def bid_sheet(schedule: pd.DataFrame, forecast_prices: pd.Series) -> pd.DataFram
     bids["side"] = np.where(schedule["charge_mw"] > 0.01, "BUY",
                             np.where(schedule["discharge_mw"] > 0.01, "SELL", "-"))
     bids["volume_mw"] = (schedule["charge_mw"] + schedule["discharge_mw"]).round(2)
-    # price limit with 10% safety margin around the forecast
+    # bid ABOVE the forecast to buy, ask BELOW it to sell — a loosening margin
     bids["price_limit_rs_mwh"] = np.where(
-        bids["side"] == "BUY", (forecast_prices * 1.10).round(0),
-        np.where(bids["side"] == "SELL", (forecast_prices * 0.90).round(0), np.nan))
+        bids["side"] == "BUY", (forecast_prices * (1 + margin)).round(0),
+        np.where(bids["side"] == "SELL", (forecast_prices * (1 - margin)).round(0),
+                 np.nan))
     return bids

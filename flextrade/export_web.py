@@ -107,6 +107,67 @@ TABLE_NOTES = {
 }
 
 
+def _headline(metrics: dict) -> dict:
+    """Parse the numbers the UI quotes out of the metric reports.
+
+    Every one of these was hardcoded in the React pages, and every one of them
+    had silently gone stale: RMSE read 262 MW against an actual 235.6, R2 0.957
+    against 0.9648, price correlation 0.919 against 0.933, and the backtest was
+    described as 61 days when it has been 55 for a while. A page that claims
+    "metrics are read from the live export, never hardcoded" has to actually
+    do it, so they are parsed here once and consumed as data.
+    """
+    import re
+    out: dict = {}
+
+    def grab(text: str, row: str, field: str, pat: str):
+        if not text:
+            return None
+        for line in text.splitlines():
+            if line.strip().startswith(row):
+                m = re.search(pat, line)
+                if m:
+                    return float(m.group(1))
+        return None
+
+    lm = metrics.get("load_model") or ""
+    out["load_test_mape_pct"] = grab(lm, "test", "mape", r"MAPE\s+([\d.]+)%")
+    out["load_test_rmse_mw"] = grab(lm, "test", "rmse", r"RMSE\s+([\d.]+)")
+    out["load_test_r2"] = grab(lm, "test", "r2", r"R2\s+([\d.]+)")
+
+    pm_ = metrics.get("price_model") or ""
+    out["price_test_mape_pct"] = grab(pm_, "test", "mape", r"MAPE\s+([\d.]+)%")
+    out["price_test_corr"] = grab(pm_, "test", "corr", r"corr\s+([\d.]+)")
+    out["price_test_evening_mape_pct"] = grab(pm_, "test", "ev", r"evening MAPE\s+([\d.]+)%")
+
+    bt = metrics.get("backtest_summary") or ""
+    m = re.search(r"\((\d+) days\)", bt)
+    out["backtest_days"] = int(m.group(1)) if m else None
+    for key, pat in (("backtest_lp_rs", r"LP on forecast\s*:\s*Rs\s*([\d,]+)"),
+                     ("backtest_greedy_rs", r"greedy baseline:\s*Rs\s*([\d,]+)"),
+                     ("backtest_perfect_rs", r"perfect bound\s*:\s*Rs\s*([\d,]+)")):
+        mm = re.search(pat, bt)
+        out[key] = float(mm.group(1).replace(",", "")) if mm else None
+    mm = re.search(r"capture ratio\s*:\s*([\d.]+)%", bt)
+    out["capture_ratio_pct"] = float(mm.group(1)) if mm else None
+    if out.get("backtest_lp_rs") and out.get("backtest_greedy_rs"):
+        up = out["backtest_lp_rs"] - out["backtest_greedy_rs"]
+        out["uplift_rs"] = up
+        out["uplift_pct"] = round(
+            (out["backtest_lp_rs"] / out["backtest_greedy_rs"] - 1) * 100, 1)
+
+    conf = metrics.get("conformal") or {}
+    out["price_band_coverage_pct"] = conf.get("conformal_coverage_pct")
+    out["price_band_raw_coverage_pct"] = conf.get("raw_coverage_pct")
+    out["price_band_log_margin"] = conf.get("log_margin")
+
+    # the price band's width, which the coverage number alone hides
+    qtext = metrics.get("price_quantiles") or ""
+    mm = re.search(r"conformal P10-P90.*?mean width Rs\s*([\d,]+)", qtext)
+    out["price_band_width_rs_mwh"] = float(mm.group(1).replace(",", "")) if mm else None
+    return out
+
+
 def export_meta():
     freshness, datasets = {}, []
     with store.connect() as con:
@@ -151,6 +212,8 @@ def export_meta():
             if len(ra) else []
     except Exception as e:
         metrics["realized_accuracy"] = {"error": str(e)[:120]}
+
+    metrics["headline"] = _headline(metrics)
 
     # pipeline health — so a broken run shows up on the dashboard instead
     # of hiding in a log file (see the 27-28 Jul DNS outage)
@@ -583,6 +646,44 @@ def export_bess():
     _dump("bess.json", out)
 
 
+def export_trade_book():
+    """The issued-order book, settled at prices that actually cleared.
+
+    Distinct from backtest.json: that re-derives schedules over a window,
+    this replays orders written to disk before each gate closed. Where the
+    two disagree, this one is the truth.
+    """
+    try:
+        from trade import book
+        s = book.book_summary()
+        if "error" not in s:
+            # the most recent day that actually SETTLED — issued_days() ends
+            # with tomorrow, whose prices have not cleared yet
+            res = None
+            for d in reversed(book.issued_days()):
+                r = book.replay(d)
+                if r is not None:
+                    res = r
+                    break
+            if True:
+                if res is not None:
+                    cols = ["block", "time_block", "side", "volume_mw",
+                            "price_limit_rs_mwh", "mcp_rs_mwh", "filled",
+                            "fill_reason", "filled_charge_mw",
+                            "filled_discharge_mw", "soc_mwh", "cash_rs"]
+                    have = [c for c in cols if c in res.rows.columns]
+                    s["latest_day"] = res.summary
+                    s["latest_blocks"] = res.rows[have].replace(
+                        {np.nan: None}).to_dict("records")
+        try:
+            s["margin_sweep"] = book.margin_sweep()
+        except Exception as e:
+            s["margin_sweep"] = {"error": f"{type(e).__name__}: {e}"}
+        _dump("trade_book.json", s)
+    except Exception as e:
+        _dump("trade_book.json", {"error": f"{type(e).__name__}: {e}"})
+
+
 def _metrics_text(name: str) -> str | None:
     f = OUT / name
     try:
@@ -721,6 +822,7 @@ if __name__ == "__main__":
         export_modules()
         export_state_forecast()
         export_forecasts()
+        export_trade_book()
         export_sqlite_series()
         export_meta()
     else:
@@ -735,4 +837,5 @@ if __name__ == "__main__":
         export_modules()
         export_state_forecast()
         export_forecasts()
+        export_trade_book()
         export_meta()  # re-dump so freshness reflects the fetches above

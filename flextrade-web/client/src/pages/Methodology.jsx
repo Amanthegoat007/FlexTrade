@@ -4,29 +4,70 @@ import { fmtTs, useApi } from "../lib/api";
 /* Every claim on this page is written to be defensible in Q&A. Metrics are
    read from the live export (meta.json), never hardcoded. */
 
-const KPI_GLOSSARY = [
-  ["MAPE", "Mean Absolute Percentage Error — average % miss. The headline accuracy number; comparable across assets of different size.", "Load: 4.33% on a 6-month unseen holdout (was 4.98% — improved 24 Jul via model-lab experiments). State forecasters typically run 2–5% day-ahead."],
-  ["RMSE", "Root Mean Squared Error, in physical units — punishes large misses more than small ones.", "Load: 262 MW on a 4,000–8,000 MW system."],
-  ["R²", "Share of variance explained (1.0 = perfect). Shows the model tracks structure, not just the mean.", "Load: 0.957 test."],
-  ["Correlation", "Whether forecast and reality move together, regardless of level. For arbitrage, shape is what pays — the battery needs the cheap/expensive ranking right, not the exact rupee.", "Price: 0.919 test."],
-  ["Pinball loss", "The proper scoring rule for a quantile forecast — penalises a P90 that gets exceeded more than 10% of the time.", "Reported per quantile in the quantile metrics."],
-  ["Coverage", "% of actual outcomes falling inside the predicted band. A calibrated P10–P90 band should cover ~80%.", "82.5% vs 80% nominal after retraining on current data; the CQR guard stays armed (its margin is recomputed every retrain — during the May regime shift it corrected 50.8% → 81.5%)."],
-  ["Capture ratio", "Backtest P&L ÷ perfect-foresight P&L — the single best summary of forecast + optimizer quality together.", "93.8% with the cap-hurdle point model (55-day walk-forward)."],
-  ["Uplift", "FlexTrade P&L − customer's baseline (static EMS) P&L. This is the revenue-share billing base (business model §3.4).", "+₹40.9 lakh over 61 days, +34%."],
-  ["CVaR", "Conditional Value-at-Risk — mean P&L of the worst 10% of scenarios. What an asset owner with debt covenants actually cares about.", "Optimized directly via the Rockafellar–Uryasev linearization."],
-  ["Normal Rate (NR)", "The DSM reference price: ⅓ I-DAM + ⅓ RTM + ⅓ ancillary charge (CERC 2024, Reg. 14). Deviations are priced off real market outcomes.", "Computed from live IEX prices every settlement."],
-  ["DSM saved", "Penalty under FlexTrade's schedule minus penalty under naive persistence, both settled identically.", "Varies day to day; shown honestly, including days persistence wins."],
+/* Values come from meta.json's parsed `headline` block, never from constants
+   here. They used to be hardcoded and every one of them had drifted: RMSE read
+   262 MW against an actual 235.6, R² 0.957 against 0.9648, price correlation
+   0.919 against 0.933, and the backtest was called 61 days when it has been 55
+   for a while. Hardcoding a metric next to a claim that metrics are never
+   hardcoded is how a demo loses an audience. */
+const n = (v, d = 2, suffix = "") =>
+  v === null || v === undefined ? "—" : `${Number(v).toFixed(d)}${suffix}`;
+const lakh = (v) => (v == null ? "—" : `₹${(v / 1e5).toFixed(1)} lakh`);
+
+const kpiGlossary = (h = {}) => [
+  ["MAPE", "Mean Absolute Percentage Error — average % miss. The headline accuracy number; comparable across assets of different size.",
+    `Delhi load: ${n(h.load_test_mape_pct)}% on a 6-month unseen holdout (was 4.98% — improved 24 Jul via model-lab experiments).`],
+  ["RMSE", "Root Mean Squared Error, in physical units — punishes large misses more than small ones.",
+    `Delhi load: ${n(h.load_test_rmse_mw, 1)} MW on a 4,000–8,000 MW system.`],
+  ["R²", "Share of variance explained (1.0 = perfect). Shows the model tracks structure, not just the mean.",
+    `Delhi load: ${n(h.load_test_r2, 4)} test.`],
+  ["Correlation", "Whether forecast and reality move together, regardless of level. For arbitrage, shape is what pays — the battery needs the cheap/expensive ranking right, not the exact rupee.",
+    `IEX DAM price: ${n(h.price_test_corr, 3)} test.`],
+  ["WAPE", "Σ|error| ÷ Σ|actual| — one division at the end instead of one per block. The honest percentage when the target can approach zero, which RTM prices do (1st percentile ₹23).",
+    "RTM intraday: 26.6% served, vs 33.0% for the hour-ratio it replaced."],
+  ["Pinball loss", "The proper scoring rule for a quantile forecast — penalises a P90 that gets exceeded more than 10% of the time.",
+    "Reported per quantile in the quantile metrics below."],
+  ["Coverage", "% of actual outcomes falling inside the predicted band. A calibrated P10–P90 band should cover ~80%.",
+    `Price band ${n(h.price_band_coverage_pct, 1)}% vs 80% nominal — but ${
+      h.price_band_width_rs_mwh ? `₹${Number(h.price_band_width_rs_mwh).toLocaleString("en-IN")}/MWh wide` : "very wide"
+    }, so read it with the width. Delhi load band: 84.2% at 605 MW.`],
+  ["Capture ratio", "Backtest P&L ÷ perfect-foresight P&L — the single best summary of forecast + optimizer quality together.",
+    `${n(h.capture_ratio_pct, 1)}% with the cap-hurdle point model (${h.backtest_days ?? "—"}-day walk-forward).`],
+  ["Uplift", "FlexTrade P&L − customer's baseline (static EMS) P&L. This is the revenue-share billing base (business model §3.4).",
+    `+${lakh(h.uplift_rs)} over ${h.backtest_days ?? "—"} days, +${n(h.uplift_pct, 1)}%.`],
+  ["CVaR", "Conditional Value-at-Risk — mean P&L of the worst 10% of scenarios. What an asset owner with debt covenants actually cares about.",
+    "Optimized via the Rockafellar–Uryasev linearization; currently OFF by default because it measured worse."],
+  ["Normal Rate (NR)", "The DSM reference price: ⅓ DAM + ⅓ RTM + ⅓ ancillary charge (CERC 2024, Reg. 14). Deviations are priced off real market outcomes.",
+    "Computed from live IEX prices; the ancillary leg is proxied by RTM (no public feed) and flagged in every result."],
+  ["DSM saved", "Penalty under FlexTrade's schedule minus penalty under naive persistence, both settled identically.",
+    "Varies day to day; shown honestly, including days persistence wins."],
 ];
 
+/* Load and price are tuned SEPARATELY and their values genuinely differ, so
+   they get separate columns. An earlier single-column version quoted the price
+   model's settings as if they were the load model's — after the model-lab
+   session retuned load, every load figure in it was wrong. */
 const PARAMS = [
-  ["n_estimators = 3000 (cap)", "Upper bound only — early stopping picks the real count (284 for load). The cap never binds."],
-  ["learning_rate = 0.03", "Small steps + early stopping: standard bias-variance trade for GBDTs. Larger rates underfit the 96-block daily shape; smaller just cost time."],
-  ["num_leaves = 127 (load) / 63 (price)", "Tree capacity ≈ interaction depth. Load has 27 features with strong interactions (hour × temp × weekday) and 132k training rows to support 127 leaves; price has fewer rows (28k), so half the capacity guards overfitting."],
-  ["min_child_samples = 50/40", "A leaf must represent ≥ ~half a day of blocks — stops the tree memorising single freak days."],
-  ["subsample / colsample = 0.8", "Row/feature bagging decorrelates trees; the standard 0.8 keeps each tree seeing most of the signal."],
-  ["reg_lambda = 1.0", "Mild L2 on leaf weights — with early stopping doing the heavy lifting, heavier regularisation just underfits."],
-  ["log(MCP) target (price)", "Prices span ₹1,000–₹10,000 (regulatory cap). Log makes a 10% error at ₹2,000 cost the same as at ₹9,000 — otherwise the model only cares about expensive blocks."],
-  ["Lags ≥ 48h (load) / ≥ 1d (price)", "Bid-time validity, not convenience: DAM bids close ~12:00 on D for D+1, when day-D load is only half known but day-D prices cleared at 13:00 on D−1. Every feature is checked against what a bidder actually knows at gate closure."],
+  ["n_estimators", "6000", "2000",
+    "An upper bound only: early stopping on the validation window picks the real count, so the cap never binds. Load can afford a higher cap because its learning rate is half as large."],
+  ["learning_rate", "0.015", "0.03",
+    "Small steps plus early stopping is the standard bias–variance trade for GBDTs. Load runs slower and longer because it has 5× the rows and a finer 96-block daily shape to resolve."],
+  ["num_leaves", "255", "63",
+    "Tree capacity ≈ interaction depth. Load has 33 features with strong interactions (hour × temperature × weekday) and 132k training rows to support 255 leaves; price has ~20k rows, so a quarter of the capacity guards against overfitting."],
+  ["min_child_samples", "20", "40",
+    "The floor on how few observations a leaf may represent — it stops a tree memorising a single freak day. Price gets the stricter floor because it has fewer rows and a much noisier target."],
+  ["subsample / colsample", "0.8 / 0.7", "0.8 / 0.8",
+    "Row and feature bagging decorrelate the trees. Load drops column sampling slightly further because several of its features are near-duplicates (lag_2d vs roll7d_mean)."],
+  ["reg_lambda", "2.0", "1.0",
+    "Mild L2 on leaf weights. Load carries more because 255 leaves is a lot of capacity to hand a model with real regime drift in it."],
+  ["recency half-life", "180 days", "—",
+    "Down-weights old regimes so the model tracks Delhi's load growth. Chosen in the model lab: 180 d beat unweighted by ~0.45 pp MAPE."],
+  ["ensemble", "3 seeds", "1",
+    "Averaging seeds removes tree-growth variance worth ~0.03 pp MAPE on load. Not worth the training time on price, where the irreducible error is far larger."],
+  ["target transform", "level", "log(MCP)",
+    "Prices span ₹0–₹10,000 (regulatory cap), so log makes a 10% error at ₹2,000 cost the same as at ₹9,000 — otherwise the model only cares about expensive blocks. Load is a narrow, strictly positive band and needs no transform."],
+  ["feature lag floor", "≥ 48 h", "≥ 1 day",
+    "Bid-time validity, not convenience: DAM bids close ~12:00 on D for D+1, when day-D load is only half known but day-D prices cleared at 13:00 on D−1. Every feature is checked against what a bidder actually knows at gate closure."],
 ];
 
 function Arch() {
@@ -180,14 +221,26 @@ export default function Methodology() {
 
       <h2>Why these hyperparameters — not magic numbers</h2>
       <Card>
-        <table className="data">
-          <thead><tr><th>Parameter</th><th>Reasoning</th></tr></thead>
-          <tbody>
-            {PARAMS.map(([p, why]) => (
-              <tr key={p}><td className="mono" style={{ whiteSpace: "nowrap" }}>{p}</td><td>{why}</td></tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="scroll-x">
+          <table className="data">
+            <thead><tr>
+              <th>Parameter</th>
+              <th className="num">Delhi load</th>
+              <th className="num">IEX DAM price</th>
+              <th>Why</th>
+            </tr></thead>
+            <tbody>
+              {PARAMS.map(([p, load, price, why]) => (
+                <tr key={p}>
+                  <td className="mono" style={{ whiteSpace: "nowrap" }}>{p}</td>
+                  <td className="num mono">{load}</td>
+                  <td className="num mono">{price}</td>
+                  <td>{why}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <h2>Measured accuracy (live from the model store)</h2>
@@ -198,7 +251,7 @@ export default function Methodology() {
         <Card title="Price model (point)" sub="13 months of scraped IEX history">
           <pre className="formula">{m.price_model || "not exported"}</pre>
         </Card>
-        <Card title="Price quantiles + conformal" sub="raw band under-covered due to a real regime shift (test mean ₹5,062 vs train ₹3,742, cap-pinning 10%→30%) — CQR fixes it without retraining">
+        <Card title="Price quantiles + conformal" sub="CQR recomputes its margin on every retrain. On the current data the raw band already covers 82.5% against an 80% target, so the correction is zero — the guard is armed but idle. Read the coverage with the width below, not on its own.">
           <pre className="formula">{m.price_quantiles || "not exported"}</pre>
         </Card>
         <Card title="Backtests" sub="every day forecast with bid-time-valid features, settled at actual cleared prices">
@@ -348,7 +401,7 @@ max  (1−λ)·E[profit] + λ·CVaR₉₀(profit)      CVaR via Rockafellar–Ur
         <table className="data">
           <thead><tr><th>KPI</th><th>Definition &amp; why it's needed</th><th>Where it stands</th></tr></thead>
           <tbody>
-            {KPI_GLOSSARY.map(([k, def, val]) => (
+            {kpiGlossary(m.headline).map(([k, def, val]) => (
               <tr key={k}><td><b>{k}</b></td><td>{def}</td><td style={{ fontSize: 12.5 }}>{val}</td></tr>
             ))}
           </tbody>
@@ -550,7 +603,7 @@ max  (1−λ)·E[profit] + λ·CVaR₉₀(profit)      CVaR via Rockafellar–Ur
         <li>RE plant is a digital twin, not plant telemetry — standard pre-integration practice; the forecast error is still real NWP error.</li>
         <li>DSM engine follows the CERC 2024 <i>structure</i> with cited provenance per rule; final gazetted slabs and SERC variants need counsel review before real settlement.</li>
         <li>Ancillary-services prices have no public feed (NLDC-internal) — the NR's third component is proxied by RTM and flagged in every result.</li>
-        <li>Annualising a summer backtest window overweights cap-price evenings — quote the 61-day number as the hard result. Measured across the full year, mean daily DAM spread is ₹7,771 vs ₹8,785 in the backtest window, so the annualised figure is ~12% optimistic; ~₹8.5 Cr/yr is the defensible number.</li>
+        <li>Annualising a summer backtest window overweights cap-price evenings — quote the walk-forward window's own number as the hard result. Measured across the full year, mean daily DAM spread is ₹7,771 vs ₹8,785 in the backtest window, so the annualised figure is ~12% optimistic; ~₹8.5 Cr/yr is the defensible number.</li>
         <li><b>The dispatch LP has no cycle cap.</b> It carries only a ₹200/MWh throughput cost, which is ~5% of the ₹3,652/MWh captured — far too soft to bind. The backtest therefore runs ~1.8 equivalent cycles/day ≈ 657 EFC/year, against the 365–550 EFC/yr a typical 2-hour warranty allows. The headline revenue is earned outside the envelope the Warranty Guard exists to protect; this is the most material open item in the stack.</li>
         <li>The day-ahead RTM model loses to persistence on the level (33.9% vs 33.2% WAPE) and is not served there — only the intraday model is promoted. It wins on spread direction at both horizons.</li>
         <li>The DSM exposure forecast prices a scheduled generator, not a DISCOM's drawal book: our settlement engine implements the general-seller band, and we could not verify a buyer profile's slabs. No "optimal schedule bias" is offered — the optimum sits at the edge of the sweep because the engine lacks the over-injection caps the real regulation carries, so any optimum would be an artifact of a missing rule rather than a real saving.</li>

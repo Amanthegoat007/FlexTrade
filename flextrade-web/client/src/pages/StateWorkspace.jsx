@@ -48,9 +48,11 @@ export default function StateWorkspace() {
   const hasRE = series.some((r) => r.solar_mwh || r.wind_mwh);
 
   // rank this state among peers by forecast accuracy
+  // sMAPE, not MAPE. MAPE is unbounded when the target nears zero and the
+  // exchange series does: rendering it put 816,144% on this page.
   const ranked = [...(energy.per_state || [])]
-    .filter((s) => s.mape_pct === s.mape_pct)
-    .sort((a, b) => a.mape_pct - b.mape_pct);
+    .filter((s) => s.smape_pct === s.smape_pct)
+    .sort((a, b) => a.smape_pct - b.smape_pct);
   const rank = ranked.findIndex((s) => s.code === profile.code) + 1;
 
   return (
@@ -77,11 +79,12 @@ export default function StateWorkspace() {
         <Stat label="Typical daily energy" value={fmtGWh(profile.mean_energy_mwh)}
           infoText="Mean energy served per day across the stored history — the state's scale, which the pooled model uses as a feature."
           hint={`peak ${fmtGWh(profile.peak_energy_mwh)} · ${profile.days_history} days held`} />
-        <Stat label="Day-ahead forecast error" info="MAPE"
-          value={perState ? `${perState.mape_pct}%` : "—"}
+        <Stat label="Day-ahead error, daily energy" info="sMAPE"
+          value={perState ? `${perState.smape_pct}%` : "—"}
           hint={perState
-            ? `vs ${perState.naive_mape_pct}% naive${rank ? ` · rank ${rank}/${ranked.length}` : ""}`
-            : "not in test window"} />
+            ? `vs ${perState.naive_smape_pct}% seasonal-naive${rank ? ` · rank ${rank}/${ranked.length}` : ""}`
+            : "not in test window"}
+          infoText="Symmetric MAPE, bounded at 200%. Used instead of plain MAPE because a state's exchange purchases can approach zero, where MAPE reports millions of percent." />
         <Stat label="Exchange purchases" info="FaaS"
           value={profile.exchange_share_pct != null ? `${profile.exchange_share_pct}%` : "—"}
           hint="share of energy bought on the power exchange — our addressable market" />
@@ -118,14 +121,14 @@ export default function StateWorkspace() {
 
       <h2 className="section-title">
         How the forecast is built for {profile.name}
-        <InfoTip text="A pooled (global) model is trained across ALL states at once with state identity and scale as features, so every state benefits from ~23x more training rows than it owns. This is the standard result from the M4/M5 forecasting competitions for short, related series." />
+        <InfoTip text="A pooled (global) model is trained across ALL modelled states at once with state identity and scale as features, so every state benefits from far more training rows than it owns. This is the standard result from the M4/M5 forecasting competitions for short, related series. What is served is an equal-weight blend of that model and a seasonal-naive baseline." />
       </h2>
       <Card sub={energy.approach}>
         <div className="grid3">
           <Stat label="Training rows" value={(energy.n_train_rows || 0).toLocaleString("en-IN")}
             hint={`${energy.n_states} states pooled · ${energy.history_from} → ${energy.history_to}`} />
-          <Stat label="Global test MAPE" value={energy.overall_mape_pct != null ? `${energy.overall_mape_pct}%` : "—"}
-            hint={`vs ${energy.naive_mape_pct}% naive (same weekday last week)`} />
+          <Stat label="All-states test sMAPE" value={energy.overall_smape_pct != null ? `${energy.overall_smape_pct}%` : "—"}
+            hint={`vs ${energy.naive_smape_pct}% seasonal-naive (same weekday last week)`} />
           <Stat label="States beating naive" value={energy.states_beating_naive || "—"}
             hint={`on a held-out ${energy.test_days}-day window`} />
         </div>
@@ -133,35 +136,41 @@ export default function StateWorkspace() {
           <b>Why pooled, not 23 separate models:</b> no state except Delhi publishes
           enough history to train a strong standalone model. One global learner with
           state identity as a feature lets short series borrow strength from long
-          ones — the finding that decided the M4/M5 competitions. Delhi additionally
-          keeps its own <b>15-minute intraday</b> model (4.33% MAPE) because it is the
-          one state with 5 years of 5-minute data; that resolution difference is
-          shown honestly rather than averaged away.
+          ones — the finding that decided the M4/M5 competitions.
+          <br /><br />
+          <b>Read the resolution difference, it matters.</b> Everything on this page
+          is a <b>daily</b> forecast: one number per state per day, which is what
+          MERIT publishes. Delhi separately runs a <b>15-minute intraday</b> model
+          (4.33% MAPE) because it is the only state publishing 5 years of 5-minute
+          SLDC load. A daily state number cannot drive a 15-minute market — it sizes
+          and screens, it does not trade. That gap is the honest limit of the
+          multi-state layer today.
         </div>
       </Card>
 
       <h2 className="section-title">All states — forecast accuracy leaderboard</h2>
-      <Card sub="Served error on the untouched test window, beside the naive baseline (same weekday last week). 'Champion' is which one we actually serve, decided on validation only. Sorted best first; a good average is never allowed to hide a bad state.">
-        <HBar height={Math.max(260, ranked.length * 19)} valLabel="Served MAPE %"
-          data={[...ranked].reverse().map((s) => ({ name: s.name, value: s.mape_pct }))} />
+      <Card sub="Served error on the untouched test window, beside the seasonal-naive baseline (same weekday last week). 'What we serve' is an equal-weight combination of the two, not a choice between them — per-state selection was measured worse than either pure strategy. Sorted best first; a good average is never allowed to hide a bad state.">
+        <HBar height={Math.max(260, ranked.length * 19)} valLabel="Served sMAPE %"
+          data={[...ranked].reverse().map((s) => ({ name: s.name, value: s.smape_pct }))} />
         <div className="scroll-x">
           <table className="data">
             <thead><tr>
               <th>State</th><th className="num">Served</th><th className="num">Pooled model</th>
-              <th className="num">Naive</th><th>Champion</th>
+              <th className="num">Seasonal naive</th><th>What we serve</th>
               <th className="num">vs naive</th><th className="num">Mean MWh/day</th>
             </tr></thead>
             <tbody>
               {ranked.map((s) => {
-                const better = s.naive_mape_pct - s.mape_pct;
+                const better = s.naive_smape_pct - s.smape_pct;
                 return (
                   <tr key={s.code}
                     style={s.code === profile.code ? { background: "var(--band)" } : undefined}>
                     <td><b>{s.name}</b></td>
-                    <td className="num"><b>{s.mape_pct}%</b></td>
-                    <td className="num" style={{ color: "var(--muted)" }}>{s.model_only_mape_pct}%</td>
-                    <td className="num" style={{ color: "var(--muted)" }}>{s.naive_mape_pct}%</td>
-                    <td><span className={`pill ${s.champion === "model" ? "verified" : "hold"}`}>{s.champion}</span></td>
+                    <td className="num"><b>{s.smape_pct}%</b></td>
+                    <td className="num" style={{ color: "var(--muted)" }}>{s.model_only_smape_pct}%</td>
+                    <td className="num" style={{ color: "var(--muted)" }}>{s.naive_smape_pct}%</td>
+                    <td><span className={`pill ${String(s.champion).startsWith("blend") ? "verified"
+                      : s.champion === "model" ? "verified" : "hold"}`}>{s.champion}</span></td>
                     <td className="num" style={{ color: better > 0 ? "var(--delta-good)" : "var(--critical)" }}>
                       {better > 0 ? "−" : "+"}{Math.abs(better).toFixed(1)} pp
                     </td>
@@ -175,25 +184,26 @@ export default function StateWorkspace() {
         {energy.underperforming?.length > 0 && (
           <div className="note crit" style={{ marginTop: 12 }}>
             <b>Where we currently lose to the trivial baseline:</b>{" "}
-            {energy.underperforming.map((u) => `${u.name} (${u.served_mape_pct}% vs ${u.naive_mape_pct}%)`).join(", ")}.
-            The champion is chosen on validation only — using test to pick would be
-            leakage — and for these states validation and test genuinely disagree
-            (Himachal is a small hydro-driven series with a seasonal regime change).
-            We show it rather than drop the row.
+            {energy.underperforming.map((u) => `${u.name} (${u.served_smape_pct}% vs ${u.naive_smape_pct}%)`).join(", ")}.
+            These are states whose weekly rhythm is so regular that "same weekday
+            last week" is genuinely hard to beat — Punjab's baseline scores 0.53%.
+            Blending still costs a little there, and we take that trade knowingly:
+            the same rule nearly halves the error on the worst state. We show the
+            rows rather than drop them.
           </div>
         )}
       </Card>
 
-      {exch.overall_mape_pct != null && (
+      {exch.overall_smape_pct != null && (
         <>
           <h2 className="section-title">Exchange-purchase forecast</h2>
           <Card sub="A second pooled model predicts how much each state will buy on the power exchange tomorrow — the number a DISCOM trader and our own Forecast-as-a-Service customers care about most.">
             <div className="grid3">
-              <Stat label="Global test MAPE" value={`${exch.overall_mape_pct}%`}
-                hint={`vs ${exch.naive_mape_pct}% naive`} />
-              <Stat label={`${profile.name} MAPE`}
-                value={perStateX ? `${perStateX.mape_pct}%` : "—"}
-                hint={perStateX ? `vs ${perStateX.naive_mape_pct}% naive` : "—"} />
+              <Stat label="All-states test sMAPE" value={`${exch.overall_smape_pct}%`}
+                hint={`vs ${exch.naive_smape_pct}% seasonal-naive`} />
+              <Stat label={`${profile.name} sMAPE`}
+                value={perStateX ? `${perStateX.smape_pct}%` : "—"}
+                hint={perStateX ? `vs ${perStateX.naive_smape_pct}% seasonal-naive` : "—"} />
               <Stat label="States beating naive" value={exch.states_beating_naive || "—"} />
             </div>
             <div className="note" style={{ marginTop: 10 }}>
