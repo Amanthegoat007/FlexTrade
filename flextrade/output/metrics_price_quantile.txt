@@ -3,4 +3,4 @@ P50  pinball   468.8 Rs/MWh   coverage  14.2% (nominal 50%)
 P90  pinball   504.3 Rs/MWh   coverage 100.0% (nominal 90%)
 
 raw P10-P90: 93.8% inside (nominal 80%), mean width Rs 6,300/MWh
-conformal P10-P90: 93.8% inside (target 80%), mean width Rs 6,300/MWh   [log-margin 0.000 = x1.00]
+asymmetric CQR P10-P90: 94.4% inside (target 80%), mean width Rs 6,362/MWh   [log-margins lo +0.017, hi +0.000]

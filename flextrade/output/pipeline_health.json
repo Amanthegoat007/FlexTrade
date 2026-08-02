@@ -1,12 +1,6 @@
 {
- "last_run_at": "2026-08-02 21:08:27",
- "stage": "complete",
- "ok": true,
- "detail": "",
- "delivery_day": "2026-08-03",
- "peak_load_mw": 6551.0,
- "forecast_lab": {
-  "peak": "ok",
-  "dsm_exposure": "ok"
- }
+ "last_run_at": "2026-08-03 02:40:52",
+ "stage": "refresh_live",
+ "ok": false,
+ "detail": "UnicodeEncodeError: 'charmap' codec can't encode character '\\u2192' in position 55: character maps to <undefined>"
 }

@@ -163,7 +163,8 @@ def _headline(metrics: dict) -> dict:
 
     # the price band's width, which the coverage number alone hides
     qtext = metrics.get("price_quantiles") or ""
-    mm = re.search(r"conformal P10-P90.*?mean width Rs\s*([\d,]+)", qtext)
+    mm = re.search(r"(?:asymmetric )?(?:CQR )?P10-P90.*?mean width Rs\s*([\d,]+)",
+                   qtext.split("raw P10-P90")[-1])
     out["price_band_width_rs_mwh"] = float(mm.group(1).replace(",", "")) if mm else None
     return out
 

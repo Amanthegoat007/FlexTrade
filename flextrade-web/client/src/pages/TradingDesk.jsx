@@ -55,12 +55,12 @@ export default function TradingDesk() {
           hint={h.price_band_coverage_pct
             ? `${h.price_band_coverage_pct}% coverage vs 80% target · ₹${Number(h.price_band_width_rs_mwh || 0).toLocaleString("en-IN")}/MWh wide`
             : "conformal-calibrated band"}
-          infoText="Coverage alone flatters this band. It is wide — comparable to the average price itself — and the conformal margin is currently zero because the raw quantiles already over-cover. It is honest about its own uncertainty rather than precise." />
+          infoText="Read coverage WITH width. This band over-covers — ~94% against an 80% target — because Indian DAM prices saturate at the Rs 10,000 cap: on cap blocks the P90 head predicts the cap and is never exceeded, so no single multiplicative calibration can tighten it without breaking the cap blocks where it is already correct. Over-covering is the conservative direction; it overstates uncertainty rather than understating it. A regime-conditional margin keyed on P(cap) is the proper fix and is not yet built." />
       </div>
 
       {quants.length > 0 && (
         <Card title="Price forecast with uncertainty band" style={{ marginTop: 14 }}
-          sub="Quantile LightGBM with a conformal guard. The band widens in the volatile evening peak and tightens overnight — real market structure, not noise. It is a wide band, and deliberately so: DAM prices pin at the ₹10,000 cap often enough that a narrow one would be dishonest.">
+          sub="Quantile LightGBM with an asymmetric conformal guard. The band widens in the volatile evening peak and tightens overnight — real market structure. It is wide, and it over-covers (~94% against 80%): the ₹10,000 price cap makes the upper bound exact on cap blocks and loose beneath them, and one multiplicative factor cannot express both. We report coverage beside width rather than selling the band as precise.">
           <FanChart data={quants} xKey="t" height={280} />
         </Card>
       )}
