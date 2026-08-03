@@ -105,26 +105,49 @@ def _latest_state_demand() -> pd.DataFrame:
 
 
 def _state_coal(day: str | None = None) -> pd.DataFrame:
+    """Coal position per state, using the resolved plant->state mapping.
+
+    Grouping on CEA's own first column attributed only 35% of the 224 GW fleet
+    to a state, because that column is the OWNER: IPP, NTPC and NTPC JV are its
+    three largest entries. Joining plant names against the maintenance report —
+    which IS grouped by state — lifts attribution to 90%, and takes Uttar
+    Pradesh from a 9 GW fleet to its real 27 GW.
+    """
+    from ingest import plant_state
     with store.connect() as con:
         if day is None:
             day = con.execute("SELECT MAX(day) FROM coal_stock").fetchone()[0]
-        df = pd.read_sql(
-            "SELECT state, SUM(capacity_mw) fleet_mw, SUM(stock_total_kt) stock_kt, "
-            "SUM(daily_req_kt) req_kt, SUM(critical) critical_plants, COUNT(*) plants "
-            "FROM coal_stock WHERE day = ? GROUP BY state", con, params=(day,))
+        raw = pd.read_sql(
+            "SELECT plant, state, capacity_mw, stock_total_kt, daily_req_kt, "
+            "critical FROM coal_stock WHERE day = ?", con, params=(day,))
+    raw["state"] = raw["plant"].map(plant_state.resolved_map()).fillna(raw["state"])
+    raw = raw[~raw["state"].astype(str).str.strip().str.lower()
+              .isin(plant_state.OWNER_BUCKETS)]
+    df = raw.groupby("state", as_index=False).agg(
+        fleet_mw=("capacity_mw", "sum"), stock_kt=("stock_total_kt", "sum"),
+        req_kt=("daily_req_kt", "sum"), critical_plants=("critical", "sum"),
+        plants=("plant", "size"))
     df["days_of_stock"] = (df["stock_kt"] / df["req_kt"].replace(0, np.nan)).round(2)
     df.attrs["day"] = day
     return df
 
 
 def _state_outages(day: str | None = None) -> pd.DataFrame:
+    """Outages per state, resolved the same way so the two agree."""
+    from ingest import plant_state
     with store.connect() as con:
         if day is None:
             day = con.execute("SELECT MAX(day) FROM unit_outage").fetchone()[0]
-        df = pd.read_sql(
-            "SELECT state, SUM(planned_mw) planned_mw, "
-            "SUM(forced_major_mw + forced_minor_mw) forced_mw, COUNT(*) units_out "
-            "FROM unit_outage WHERE day = ? GROUP BY state", con, params=(day,))
+        raw = pd.read_sql(
+            "SELECT station, state, planned_mw, forced_major_mw, forced_minor_mw "
+            "FROM unit_outage WHERE day = ?", con, params=(day,))
+    raw["state"] = raw["station"].map(plant_state.resolved_map()).fillna(raw["state"])
+    raw = raw[~raw["state"].astype(str).str.strip().str.lower()
+              .isin(plant_state.OWNER_BUCKETS)]
+    raw["forced_mw"] = raw["forced_major_mw"] + raw["forced_minor_mw"]
+    df = raw.groupby("state", as_index=False).agg(
+        planned_mw=("planned_mw", "sum"), forced_mw=("forced_mw", "sum"),
+        units_out=("station", "size"))
     df.attrs["day"] = day
     return df
 
@@ -205,10 +228,21 @@ def build() -> dict:
         band = pd.cut(scored["stress"], [-0.1, 25, 50, 75, 100],
                       labels=["loose", "normal", "tight", "very tight"])
         scored["band"] = band.astype(str)
-        df = df.merge(scored[["code", "stress", "band", "raw", "exposed_mw"]],
-                      on="code", how="left")
+        # MW AT RISK = how much they buy x how exposed they are when they buy.
+        # Intensity alone ranks Chandigarh (366 MW, imports everything) above
+        # Madhya Pradesh (7,237 MW) — true as a percentage and useless as a
+        # book. Both are reported: stress is the intensity, this is the size,
+        # and the default ordering is by size, because that is what a desk acts
+        # on. A risk officer can sort the other way.
+        scored["mw_at_risk"] = (scored["exposed_mw"]
+                                * scored["stress"] / 100).round(0)
+        df = df.merge(
+            scored[["code", "stress", "band", "raw", "exposed_mw", "mw_at_risk"]],
+            on="code", how="left")
 
-    df = df.sort_values("stress", ascending=False, na_position="last")
+    # order by MW at risk, not by intensity — see the note above
+    sort_key = "mw_at_risk" if "mw_at_risk" in df.columns else "stress"
+    df = df.sort_values(sort_key, ascending=False, na_position="last")
 
     def why(r) -> str:
         bits = []
@@ -264,16 +298,17 @@ if __name__ == "__main__":
     print(f"State Grid Stress — demand asof {r['demand_asof']}, "
           f"coal {r['coal_day']}, outages {r['outage_day']}")
     print(f"  scored {r['n_scored']} of {r['n_states']} states\n")
-    print(f"  {'state':18s} {'stress':>7} {'band':>11} {'import%':>8} "
-          f"{'MW exposed':>11} {'coal d':>7} {'out%':>6}")
+    print(f"  {'state':18s} {'MW at risk':>11} {'stress':>7} {'band':>11} "
+          f"{'import%':>8} {'coal d':>7} {'out%':>6}")
     for s in r["states"][:16]:
         if s.get("stress") is None:
             continue
         cd = f"{s['days_of_stock']:.1f}" if s.get("days_of_stock") else "  -"
         orr = f"{s['outage_rate_pct']:.1f}" if s.get("outage_rate_pct") else "  -"
-        print(f"  {s['name'][:18]:18s} {s['stress']:7.1f} {s['band']:>11} "
+        print(f"  {s['name'][:18]:18s} {s.get('mw_at_risk') or 0:11,.0f} "
+              f"{s['stress']:7.1f} {s['band']:>11} "
               f"{s['import_dependence_pct'] if s['import_dependence_pct'] is not None else 0:8.1f} "
-              f"{s.get('exposed_mw') or 0:11,.0f} {cd:>7} {orr:>6}")
+              f"{cd:>7} {orr:>6}")
     print()
     top = next((s for s in r["states"] if s.get("stress") is not None), None)
     if top:

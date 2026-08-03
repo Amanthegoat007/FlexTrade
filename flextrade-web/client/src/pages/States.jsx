@@ -311,19 +311,19 @@ function StressPanel({ st }) {
       <div className="scroll-x">
         <table className="data">
           <thead><tr>
-            <th>State</th><th className="num">Stress</th><th>Band</th>
-            <th className="num">Imports</th><th className="num">MW exposed</th>
-            <th className="num">Coal days</th><th className="num">Own fleet out</th>
-            <th>Why</th>
+            <th>State</th><th className="num">MW at risk</th>
+            <th className="num">Stress</th><th>Band</th>
+            <th className="num">Imports</th><th className="num">Coal days</th>
+            <th className="num">Own fleet out</th><th>Why</th>
           </tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.code}>
                 <td><b>{r.name}</b></td>
-                <td className="num"><b style={{ color: bandColor(r.band) }}>{r.stress}</b></td>
+                <td className="num"><b>{r.mw_at_risk != null ? Math.round(r.mw_at_risk).toLocaleString("en-IN") : "—"}</b></td>
+                <td className="num" style={{ color: bandColor(r.band) }}>{r.stress}</td>
                 <td><span className="pill" style={{ background: "var(--wash)", color: bandColor(r.band) }}>{r.band}</span></td>
                 <td className="num">{r.import_dependence_pct != null ? `${r.import_dependence_pct}%` : "—"}</td>
-                <td className="num">{r.exposed_mw != null ? Math.round(r.exposed_mw).toLocaleString("en-IN") : "—"}</td>
                 <td className="num">{r.days_of_stock != null ? r.days_of_stock.toFixed(1) : "—"}</td>
                 <td className="num">{r.outage_rate_pct != null ? `${r.outage_rate_pct}%` : "—"}</td>
                 <td style={{ fontSize: 12, color: "var(--muted)" }}>{r.why}</td>
@@ -341,12 +341,16 @@ function StressPanel({ st }) {
         prices only became available to us on 3 Aug via the area-price feed, which
         has no history endpoint, so that validation is still accruing.
         <div style={{ marginTop: 6 }}>
-          Coal and outage coverage is also partial, and for a structural reason:
-          CEA groups its first column by OWNER, not state — "IPP" (73 GW) and
-          "NTPC" (55 GW) are the largest entries — so only plants listed under a
-          state's own name are attributed to it. A plant-to-state lookup would
-          close that; CEA publishes none, so it is shown as missing rather than
-          guessed.
+          Coal and outage attribution was partial for a structural reason: CEA
+          groups its first column by OWNER, not state — "IPP" (73 GW) and "NTPC"
+          (55 GW) are its largest entries — so grouping on it reached only 35% of
+          the 224 GW fleet. CEA publishes no plant-to-state mapping, so we derived
+          one by joining plant names against the maintenance report, which IS
+          grouped by state. That lifts attribution to <b>90%</b> and takes Uttar
+          Pradesh from an apparent 9 GW fleet to its real 27 GW. Matching is
+          conservative — exact, then prefix, then token — and the 10% that stays
+          ambiguous is shown as missing rather than guessed, because a wrong state
+          silently moves megawatts of risk from one book to another.
         </div>
       </div>
     </>
