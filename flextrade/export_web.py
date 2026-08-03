@@ -107,6 +107,53 @@ TABLE_NOTES = {
 }
 
 
+def _collection_coverage(hours_back: int = 24 * 10) -> dict:
+    """How complete is the 15-minute collection, and is it biased by hour?
+
+    The multi-state story rests entirely on accrual — no upstream source has a
+    history endpoint, so depth exists only if we collect it. That makes a gap
+    permanently unrecoverable, and it makes a SYSTEMATIC gap worse than a
+    random one: measured on 3 Aug, the collector had ZERO snapshots between
+    05:00 and 08:00 because the laptop was asleep, so an intraday model trained
+    on it would never once have seen the morning ramp. Row count alone hid
+    that completely — 1,437 snapshots looked healthy.
+
+    This surfaces coverage per hour-of-day so a hole shows up as a hole.
+    """
+    try:
+        with store.connect() as con:
+            df = pd.read_sql(
+                "SELECT DISTINCT fetched_at FROM state_live "
+                f"WHERE fetched_at >= datetime('now','-{hours_back} hours')", con)
+        if not len(df):
+            return {"error": "no state_live rows in the window"}
+        t = pd.to_datetime(df["fetched_at"])
+        span_h = max((t.max() - t.min()).total_seconds() / 3600, 1)
+        days = max(span_h / 24, 1e-9)
+        by_hour = t.dt.hour.value_counts().reindex(range(24), fill_value=0)
+        # 4 snapshots an hour is the target cadence
+        pct = (by_hour / (days * 4) * 100).round(0)
+        dead = [int(h) for h in range(24) if by_hour[h] == 0]
+        thin = [int(h) for h in range(24) if 0 < pct[h] < 50]
+        gaps = t.sort_values().diff().dt.total_seconds().div(60)
+        return {
+            "snapshots": int(len(t)),
+            "span_hours": round(span_h, 1),
+            "expected_at_15min": int(span_h * 4),
+            "hours_with_no_data": dead,
+            "hours_under_half_covered": thin,
+            "worst_gap_hours": round(float(gaps.max() / 60), 1) if len(gaps) > 1 else 0.0,
+            "hours_lost_to_gaps": round(float(gaps[gaps > 25].sum() / 60), 1),
+            "coverage_by_hour_pct": {int(h): float(pct[h]) for h in range(24)},
+            "note": ("Every upstream source here is snapshot-only, so a missed "
+                     "block cannot be backfilled. A systematic hole biases any "
+                     "model trained on the result, which is why this is "
+                     "reported by hour rather than as a single row count."),
+        }
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
 def _headline(metrics: dict) -> dict:
     """Parse the numbers the UI quotes out of the metric reports.
 
@@ -215,6 +262,7 @@ def export_meta():
         metrics["realized_accuracy"] = {"error": str(e)[:120]}
 
     metrics["headline"] = _headline(metrics)
+    metrics["collection"] = _collection_coverage()
 
     # pipeline health — so a broken run shows up on the dashboard instead
     # of hiding in a log file (see the 27-28 Jul DNS outage)

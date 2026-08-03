@@ -5,6 +5,7 @@ import { fmtMW, useApi } from "../lib/api";
 const REGION_ORDER = ["Northern", "Western", "Southern", "Eastern", "North-Eastern"];
 
 export default function States() {
+  const { data: meta } = useApi("/api/meta");
   const { data: live, loading, error } = useApi("/api/live", { refreshMs: 120_000 });
   const { data: reg } = useApi("/api/states");
 
@@ -96,6 +97,8 @@ export default function States() {
           </div>
         </Card>
       )}
+
+      <CoveragePanel cov={meta?.metrics?.collection} />
 
       <h2 className="section-title">Deep adapters — beyond MERIT</h2>
       <div className="grid cols-2">
@@ -222,6 +225,50 @@ export default function States() {
             </tbody>
           </table>
         </div>
+      </Card>
+    </>
+  );
+}
+
+/* Collection coverage. The multi-state layer rests entirely on accrual — no
+   upstream source has a history endpoint — so a gap is permanently
+   unrecoverable and a SYSTEMATIC gap is worse than a random one. Row count
+   hides that; coverage by hour does not. */
+function CoveragePanel({ cov }) {
+  if (!cov || cov.error) return null;
+  const dead = cov.hours_with_no_data || [];
+  const thin = cov.hours_under_half_covered || [];
+  const byHour = cov.coverage_by_hour_pct || {};
+  const bars = Array.from({ length: 24 }, (_, h) => ({
+    name: `${String(h).padStart(2, "0")}`,
+    value: Math.min(Math.round(byHour[h] ?? 0), 200),
+  }));
+  const bad = dead.length > 0;
+  return (
+    <>
+      <h2 className="section-title">Collection coverage — can this data be trusted?</h2>
+      <div className={`note ${bad ? "crit" : "info"}`}>
+        <b>{bad ? "⚠ There are hours we never collect." : "Coverage is even across the day."}</b>{" "}
+        {cov.snapshots?.toLocaleString("en-IN")} snapshots over {cov.span_hours} h
+        against {cov.expected_at_15min?.toLocaleString("en-IN")} expected at a
+        15-minute cadence.
+        {dead.length > 0 && (
+          <> <b>No data at all</b> in the {dead.map((h) => `${String(h).padStart(2,"0")}:00`).join(", ")} hours
+          {dead.includes(5) || dead.includes(6) || dead.includes(7)
+            ? " — which is the morning ramp, one of the most dynamic periods in the system." : "."}</>
+        )}
+        {thin.length > 0 && <> Under half covered at {thin.map((h) => `${String(h).padStart(2,"0")}:00`).join(", ")}.</>}
+        <div style={{ marginTop: 6 }}>
+          {cov.hours_lost_to_gaps} h lost to gaps, worst single gap {cov.worst_gap_hours} h.
+          Every source here is snapshot-only, so a missed block cannot be
+          backfilled — which is why we publish this instead of a row count. An
+          intraday model trained on a biased sample would inherit the bias
+          silently.
+        </div>
+      </div>
+      <Card title="Snapshots captured per hour of day" info="15-min target"
+        sub="100% = the full 4 snapshots an hour. Above 100% means the collector ran more often than scheduled; zero means the machine was asleep.">
+        <HBar data={bars} height={300} valLabel="% of target cadence" />
       </Card>
     </>
   );

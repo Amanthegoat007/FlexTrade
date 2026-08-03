@@ -7,55 +7,55 @@
     "blocks": 96,
     "n_scenarios": 60,
     "entity_peak_mw": 200.0,
-    "schedule_mwh": 4178.792551027807,
-    "expected_dsm_rs": -59462.89093543484,
-    "expected_payable_rs": 14972.429145920376,
+    "schedule_mwh": 4190.445275793327,
+    "expected_dsm_rs": -58784.20405354459,
+    "expected_payable_rs": 16023.203077681064,
     "p90_payable_rs": 0.0,
-    "worst_payable_rs": 890104.0958228009,
+    "worst_payable_rs": 949286.8300045186,
     "p90_dsm_rs": 0.0,
-    "p10_dsm_rs": -243126.66678688632,
-    "worst_scenario_rs": 890104.0958228009,
-    "best_scenario_rs": -1445677.705916144,
+    "p10_dsm_rs": -234314.0255632786,
+    "worst_scenario_rs": 949286.8300045186,
+    "best_scenario_rs": -1400645.9363039737,
     "expected_blocks_outside_band": 11.983333333333333,
     "expected_pct_outside_band": 12.482638888888888,
-    "normal_rate_mean_rs_mwh": 3547.113683987924,
+    "normal_rate_mean_rs_mwh": 3738.9101332077353,
     "rtm_basis": "rtm_model day-ahead",
     "scenario_basis": "60 whole-day forecast-error curves sampled from the load model's 6-month held-out window (day shape preserved)",
     "worst_scenarios": [
       {
         "error_day": "2026-03-04",
-        "net_dsm_rs": 890104.0958228009,
-        "payable_rs": 890104.0958228009,
+        "net_dsm_rs": 949286.8300045186,
+        "payable_rs": 949286.8300045186,
         "blocks_outside_band": 71,
-        "mae_mw": 30.315903090234624
+        "mae_mw": 30.53614059315772
       },
       {
         "error_day": "2026-02-08",
-        "net_dsm_rs": -11882.172624389195,
-        "payable_rs": 8241.652932421623,
+        "net_dsm_rs": -6919.535565587693,
+        "payable_rs": 12105.354656345255,
         "blocks_outside_band": 9,
-        "mae_mw": 5.49792699950775
+        "mae_mw": 5.45814945406012
       },
       {
         "error_day": "2026-02-20",
         "net_dsm_rs": 0.0,
         "payable_rs": 0.0,
         "blocks_outside_band": 0,
-        "mae_mw": 3.522224396499876
+        "mae_mw": 3.529384330481545
       },
       {
         "error_day": "2025-12-19",
-        "net_dsm_rs": -16255.73542757289,
+        "net_dsm_rs": -16733.292861907074,
         "payable_rs": 0.0,
         "blocks_outside_band": 13,
-        "mae_mw": 8.486298814954957
+        "mae_mw": 8.578203075490473
       },
       {
         "error_day": "2026-02-07",
-        "net_dsm_rs": -80568.12002419656,
+        "net_dsm_rs": -75906.6715066333,
         "payable_rs": 0.0,
         "blocks_outside_band": 20,
-        "mae_mw": 7.581738617738639
+        "mae_mw": 7.516315293198956
       }
     ]
   },
@@ -65,72 +65,72 @@
     "curve": [
       {
         "bias_pct": -4,
-        "expected_payable_rs": 9529.741176080493,
+        "expected_payable_rs": 10112.100624970155,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -199860.117645134,
+        "expected_dsm_rs": -203670.19787943232,
         "pct_outside_band": 33.57638888888889
       },
       {
         "bias_pct": -3,
-        "expected_payable_rs": 10680.385060222625,
+        "expected_payable_rs": 11364.037073553116,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -151437.61212815891,
+        "expected_dsm_rs": -153426.85560411194,
         "pct_outside_band": 26.38888888888889
       },
       {
         "bias_pct": -2,
-        "expected_payable_rs": 11976.979510721254,
+        "expected_payable_rs": 12766.427210493352,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -113176.35753210694,
+        "expected_dsm_rs": -113941.83215784245,
         "pct_outside_band": 20.416666666666668
       },
       {
         "bias_pct": -1,
-        "expected_payable_rs": 13435.30197637234,
+        "expected_payable_rs": 14351.104484833415,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -83279.49052451654,
+        "expected_dsm_rs": -83206.6441249444,
         "pct_outside_band": 15.625
       },
       {
         "bias_pct": 0,
-        "expected_payable_rs": 14972.429145920376,
+        "expected_payable_rs": 16023.203077681064,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -59462.89093543484,
+        "expected_dsm_rs": -58784.20405354459,
         "pct_outside_band": 12.482638888888888
       },
       {
         "bias_pct": 1,
-        "expected_payable_rs": 16630.972561919312,
+        "expected_payable_rs": 17834.595430221,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -40575.53194919378,
+        "expected_dsm_rs": -39461.23252206428,
         "pct_outside_band": 10.052083333333334
       },
       {
         "bias_pct": 2,
-        "expected_payable_rs": 18462.00136483129,
+        "expected_payable_rs": 19841.97784469016,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -25987.800176839442,
+        "expected_dsm_rs": -24529.84944374596,
         "pct_outside_band": 7.552083333333333
       },
       {
         "bias_pct": 3,
-        "expected_payable_rs": 20471.36451648201,
-        "p90_payable_rs": 162.26739246422568,
-        "expected_dsm_rs": -14424.962788671472,
+        "expected_payable_rs": 22045.417635372683,
+        "p90_payable_rs": 161.7369787443864,
+        "expected_dsm_rs": -12658.859885752585,
         "pct_outside_band": 6.284722222222222
       },
       {
         "bias_pct": 4,
-        "expected_payable_rs": 23022.19463848652,
-        "p90_payable_rs": 2933.6181233609595,
-        "expected_dsm_rs": -4648.28175759695,
+        "expected_payable_rs": 24797.152567096342,
+        "p90_payable_rs": 2922.1668970904298,
+        "expected_dsm_rs": -2582.374828426468,
         "pct_outside_band": 5.46875
       }
     ],
     "unconstrained_argmin_pct": -4,
     "argmin_at_boundary": true,
     "objective": "expected payable DSM charge (credits not netted)",
-    "p50_schedule_payable_rs": 14972.429145920376,
+    "p50_schedule_payable_rs": 16023.203077681064,
     "p50_pct_outside_band": 12.482638888888888,
     "recommendation": null,
     "recommendation_withheld_because": "the minimum sits at the edge of the sweep: the implemented general-seller Normal Rate credits favourable deviation without the caps the real regulation applies, so any optimum would be an artifact of a missing rule rather than a real saving"
