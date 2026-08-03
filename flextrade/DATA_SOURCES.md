@@ -167,3 +167,52 @@ measure how often it happens, which is what sizes the opportunity.
    scrape by 2.6-60x, so this is not a shortcut worth taking carelessly.
 6. **Realised RE at plant level** — MERIT gives daily state totals, which is
    what models/re_state.py now uses. Plant-level, intraday RE remains absent.
+
+
+---
+
+## 7. Supply-side feeds — one worked, one did not (3 Aug 2026)
+
+Both were probed properly, both are date-parameterised on the same NPP path,
+and both were BACKFILLED and TESTED against price before either was adopted.
+Only one earned a place in the model.
+
+### Coal stock — ADOPTED
+
+`/public-reports/cea/daily/fuel/DD-MM-YYYY/dailyCoal1-YYYY-MM-DD.xls`
+399 days backfilled, 0 failures, ~190 plants/day, 224 GW fleet.
+
+    coal stock         mean DAM price   cap-pinned blocks
+    thinnest 14.0 d        Rs 5,146          31.7%
+    fullest  19.1 d        Rs 3,969           9.3%
+
+days-of-stock vs cap-share: **-0.457**. Adopted on the backtest, not on MAPE:
+capture ratio 94.7% -> **95.6%**, even though MAPE rose 20.4% -> 21.8%. Shape
+is what pays.
+
+### Unit outages — REJECTED as a price feature, kept as context
+
+`/public-reports/cea/daily/dgr/DD-MM-YYYY/dgr11-YYYY-MM-DD.xls`
+426 days backfilled, 0 failures. Unit-level, with planned / forced-major /
+forced-minor MW separated, the start timestamp, the expected return, and a
+free-text reason ("WATER WALL TUBE LEAKAGE", "FURNACE FIRE OUT").
+
+It looks like the perfect supply-shock feature and it is not, because it is
+**endogenous**: units come out when they are not needed. Every decomposition
+correlates the WRONG WAY with price.
+
+    forced MW (raw)                  -0.446
+    forced MW vs its seasonal normal -0.167
+    forced MAJOR only                -0.479
+    NEW trips that day only          -0.117   (essentially noise)
+
+The days with the biggest new trips have the LOWEST prices. Maintenance is
+scheduled into the monsoon slack season, and "forced minor" appears to include
+economic backing-down. Feeding any of these to the model would teach it
+"outages mean cheap power", which is backwards and would fail precisely in a
+winter outage event — the case it would be bought for.
+
+So it is collected for what it honestly is: **operational supply context** —
+what is down, where, and why. A conditional formulation (outage anomaly
+interacted with a demand-tightness term) might extract the real signal, but
+that is a modelling project, not a feature to bolt on before a demo.

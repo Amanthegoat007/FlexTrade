@@ -56,6 +56,23 @@ def _coal():
     return "no report published in the last 4 days"
 
 
+def _outages():
+    # NOT a price feature — see DATA_SOURCES.md. Collected as operational
+    # supply context (what is down, where, and why), which is real and useful
+    # even though it failed as a price signal.
+    from datetime import date, timedelta
+    from ingest import outages
+    for back in range(3, 10):
+        d = date.today() - timedelta(days=back)
+        df = outages.fetch(d)
+        if len(df):
+            outages.store_day(df)
+            f = (df["forced_major_mw"] + df["forced_minor_mw"]).sum()
+            return (f"{d} {len(df)} units, forced {f:,.0f} MW, "
+                    f"planned {df['planned_mw'].sum():,.0f} MW")
+    return "no maintenance report in the last 10 days"
+
+
 def _area_price():
     from ingest import vidyutpravah
     s = vidyutpravah.poll()
@@ -69,6 +86,7 @@ SOURCES = [
     ("kptcl", _kptcl),          # Karnataka: demand/drawal/frequency
     ("area_price", _area_price),  # state-wise clearing price when the market splits
     ("coal", _coal),            # supply side: the strongest exogenous signal found
+    ("outages", _outages),      # supply context; measured NOT usable as a price feature
 ]
 
 
