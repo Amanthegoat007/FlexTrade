@@ -183,6 +183,7 @@ def refresh_forecast_lab(target: date | None = None) -> dict:
         ("peak", lambda: __import__(
             "models.peak_model", fromlist=["x"]).forecast(target)),
         ("dsm_exposure", _refresh_dsm_exposure),
+        ("stress", _refresh_stress),
     ]
     for name, fn in steps:
         try:
@@ -194,6 +195,15 @@ def refresh_forecast_lab(target: date | None = None) -> dict:
     ok = [k for k, v in results.items() if v == "ok"]
     print(f"  forecast lab: {len(ok)}/{len(results)} ok ({', '.join(ok) or 'none'})")
     return results
+
+
+def _refresh_stress():
+    """State Grid Stress reads live MERIT + the latest coal/outage days, so it
+    has to be rebuilt each run or the dashboard shows yesterday's exposure."""
+    import json as _json
+    from models import stress
+    (OUT / "stress.json").write_text(
+        _json.dumps(stress.build(), indent=2, default=float))
 
 
 def _refresh_dsm_exposure():

@@ -6,6 +6,7 @@ const REGION_ORDER = ["Northern", "Western", "Southern", "Eastern", "North-Easte
 
 export default function States() {
   const { data: meta } = useApi("/api/meta");
+  const { data: stress } = useApi("/api/stress");
   const { data: live, loading, error } = useApi("/api/live", { refreshMs: 120_000 });
   const { data: reg } = useApi("/api/states");
 
@@ -97,6 +98,8 @@ export default function States() {
           </div>
         </Card>
       )}
+
+      <StressPanel st={stress} />
 
       <CoveragePanel cov={meta?.metrics?.collection} />
 
@@ -270,6 +273,82 @@ function CoveragePanel({ cov }) {
         sub="100% = the full 4 snapshots an hour. Above 100% means the collector ran more often than scheduled; zero means the machine was asleep.">
         <HBar data={bars} height={300} valLabel="% of target cadence" />
       </Card>
+    </>
+  );
+}
+
+/* State Grid Stress. Competitors sell forecasts; this sells RISK, and it is
+   only possible because we hold coal, outages, demand and RE at state level in
+   one place. The index answers "which state has to buy, and how exposed is it
+   when it does" — the question that decides who needs us. */
+function StressPanel({ st }) {
+  if (!st) return null;
+  if (st.error) return <Card title="State Grid Stress"><div className="note">{st.error}</div></Card>;
+  const rows = (st.states || []).filter((r) => r.stress !== null && r.stress !== undefined);
+  if (!rows.length) return null;
+  const bandColor = (b) => (b === "very tight" ? "var(--critical)"
+    : b === "tight" ? "var(--s6)" : b === "normal" ? "var(--s1)" : "var(--muted)");
+  const top = rows[0];
+
+  return (
+    <>
+      <h2 className="section-title">
+        State Grid Stress — who has to buy, and how exposed they are
+        <InfoTip text="Built from four state-attributed datasets we hold in one place: import dependence (MERIT, 15-min), coal days-of-stock and unit outages (CEA, both backfilled over a year), and RE generation. It measures market EXPOSURE, not a forecast." />
+      </h2>
+
+      <div className="note info">
+        <b>A forecast says how much a state will draw. This says whether it can cover it.</b>{" "}
+        Import dependence is the base — a state buying 80% of its power is exposed
+        to every price spike, one buying 10% is not — and thin coal or units out
+        make the same dependence riskier. Right now the tightest is{" "}
+        <b>{top.name}</b>: {top.why}.
+        <div style={{ marginTop: 6, color: "var(--muted)" }}>
+          Demand as of {st.demand_asof} · coal {st.coal_day} · outages {st.outage_day}
+        </div>
+      </div>
+
+      <div className="scroll-x">
+        <table className="data">
+          <thead><tr>
+            <th>State</th><th className="num">Stress</th><th>Band</th>
+            <th className="num">Imports</th><th className="num">MW exposed</th>
+            <th className="num">Coal days</th><th className="num">Own fleet out</th>
+            <th>Why</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.code}>
+                <td><b>{r.name}</b></td>
+                <td className="num"><b style={{ color: bandColor(r.band) }}>{r.stress}</b></td>
+                <td><span className="pill" style={{ background: "var(--wash)", color: bandColor(r.band) }}>{r.band}</span></td>
+                <td className="num">{r.import_dependence_pct != null ? `${r.import_dependence_pct}%` : "—"}</td>
+                <td className="num">{r.exposed_mw != null ? Math.round(r.exposed_mw).toLocaleString("en-IN") : "—"}</td>
+                <td className="num">{r.days_of_stock != null ? r.days_of_stock.toFixed(1) : "—"}</td>
+                <td className="num">{r.outage_rate_pct != null ? `${r.outage_rate_pct}%` : "—"}</td>
+                <td style={{ fontSize: 12, color: "var(--muted)" }}>{r.why}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="note crit" style={{ marginTop: 12 }}>
+        <b>Read the limits, they are real.</b> The index is validated at NATIONAL
+        level, where we have price history: the tightest quintile saw 28.1% of
+        blocks pin at the price cap against 6.1% in the loosest, monotonic across
+        all five bands. <b>Per state it is not yet backtested</b> — state-level
+        prices only became available to us on 3 Aug via the area-price feed, which
+        has no history endpoint, so that validation is still accruing.
+        <div style={{ marginTop: 6 }}>
+          Coal and outage coverage is also partial, and for a structural reason:
+          CEA groups its first column by OWNER, not state — "IPP" (73 GW) and
+          "NTPC" (55 GW) are the largest entries — so only plants listed under a
+          state's own name are attributed to it. A plant-to-state lookup would
+          close that; CEA publishes none, so it is shown as missing rather than
+          guessed.
+        </div>
+      </div>
     </>
   );
 }

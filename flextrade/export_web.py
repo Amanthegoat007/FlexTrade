@@ -695,6 +695,34 @@ def export_bess():
     _dump("bess.json", out)
 
 
+def export_stress():
+    """State Grid Stress Index — exposure and why, per state."""
+    try:
+        from models import stress
+        _dump("stress.json", stress.build())
+    except Exception as e:
+        _dump("stress.json", {"error": f"{type(e).__name__}: {e}"})
+
+
+def export_re_state():
+    """Real RE forecast on MEASURED generation — distinct from the twin.
+
+    models/re_model.py simulates a hypothetical plant; this is trained and
+    scored on generation that actually happened, per state, from MERIT's
+    plant-level feed. It was built and then left unexported, which meant the
+    fix for the biggest honesty gap in the stack was invisible on the site.
+    """
+    f = OUT / "re_state_forecast.json"
+    if f.exists():
+        try:
+            _dump("re_state.json", json.loads(f.read_text(encoding="utf-8-sig")))
+            return
+        except Exception as e:
+            _dump("re_state.json", {"error": f"{type(e).__name__}: {e}"})
+            return
+    _dump("re_state.json", {"error": "not trained — run models/re_state.py"})
+
+
 def export_bankability():
     """Project-finance model — DSCR, IRR, LCOS. What a lender reads."""
     try:
@@ -902,6 +930,8 @@ if __name__ == "__main__":
         export_forecasts()
         export_trade_book()
         export_bankability()
+        export_re_state()
+        export_stress()
         export_sqlite_series()
         export_meta()
     else:
@@ -918,4 +948,6 @@ if __name__ == "__main__":
         export_forecasts()
         export_trade_book()
         export_bankability()
+        export_re_state()
+        export_stress()
         export_meta()  # re-dump so freshness reflects the fetches above

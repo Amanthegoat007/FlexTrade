@@ -26,6 +26,8 @@ const STATIC_FILES = {
   "/api/forecasts": "forecasts",
   "/api/trade-book": "trade_book",
   "/api/bankability": "bankability",
+  "/api/re-state": "re_state",
+  "/api/stress": "stress",
   "/api/live": "live",
   "/api/bess/history": "bess_history",
   "/api/load/recent": "load_recent",

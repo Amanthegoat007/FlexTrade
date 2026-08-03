@@ -1,11 +1,12 @@
 import { useState } from "react";
 
-import { Card, Loading, PageHeader, Stat } from "../components/ui";
+import { Card, InfoTip, Loading, PageHeader, Stat } from "../components/ui";
 import { TimeSeries } from "../components/charts";
 import { fmtINR, fmtTs, useApi } from "../lib/api";
 
 export default function Renewables() {
   const { data: dsm, loading, error } = useApi("/api/dsm");
+  const { data: re } = useApi("/api/re-state");
   const [profile, setProfile] = useState("CERC_2024");
 
   if (loading && !dsm) return <Loading error={error} />;
@@ -27,6 +28,8 @@ export default function Renewables() {
         lead="A solar + wind digital twin scored on real day-ahead weather error, settled block-by-block
               through a versioned CERC engine (2022 & 2024), with an alerts engine that flags a
               profitable schedule revision before the gate closes." />
+      <RealREPanel re={re} />
+
       <h2 className="section-title">Deviation Settlement Mechanism — settlement day {dsm?.settlement_day}</h2>
       <div className="note info" style={{ marginBottom: 12 }}>
         Reference portfolio: 50 MW solar + 50 MW wind <b>digital twin</b> (Delhi NCR).
@@ -146,6 +149,89 @@ export default function Renewables() {
           by counsel — which is exactly what the DSM spec's own risk table (§6) requires.
         </div>
       </Card>
+    </>
+  );
+}
+
+/* The REAL RE forecast — trained and scored on measured generation from
+   MERIT's plant-level feed, as opposed to the physics twin above which
+   simulates a hypothetical plant. This is the answer to "everything here
+   rests on a simulation": it no longer does. */
+function RealREPanel({ re }) {
+  if (!re) return null;
+  if (re.error) return <Card title="Measured RE forecast"><div className="note">{re.error}</div></Card>;
+  const solar = re.solar_mwh || {};
+  const wind = re.wind_mwh || {};
+  const rows = [["Solar", solar], ["Wind", wind]];
+
+  return (
+    <>
+      <h2 className="section-title">
+        Measured RE forecast — real generation, not a twin
+        <InfoTip text="Trained and scored on daily solar and wind output that actually happened, from MERIT's plant-level endpoint. The digital twin above prices a hypothetical plant; this prices real fleets in real states." />
+      </h2>
+      <div className="note info">
+        <b>This is the part that is not simulated.</b> The DSM settlement above uses
+        a physics twin, because we hold no plant-level telemetry. But MERIT publishes{" "}
+        <b>measured daily solar and wind output per state</b>, and this model is
+        trained and scored on that — generation that actually happened, scored
+        against generation that actually happened. Rajasthan alone averages
+        43,444 MWh/day of solar.
+      </div>
+
+      <div className="grid2">
+        {rows.map(([name, v]) => (
+          <Card key={name} title={`${name} — served error`} info="WAPE"
+            sub={v.basis || "pooled across states, chronological split"}>
+            {v.error ? <div className="note">{v.error}</div> : (
+              <>
+                <div className="grid3">
+                  <Stat label="Served" value={`${v.served_wape_pct}%`} unit="WAPE"
+                    hint={`vs ${v.naive_wape_pct}% seasonal-naive`} />
+                  <Stat label="Beat naive" value={v.states_beating_naive || "—"}
+                    hint={`${v.n_states} states, ${v.test_days}-day held-out window`} />
+                  <Stat label="Training rows" value={(v.n_train_rows || 0).toLocaleString("en-IN")}
+                    hint={`${v.history_from} → ${v.history_to}`} />
+                </div>
+                <div className="scroll-x">
+                  <table className="data">
+                    <thead><tr>
+                      <th>State</th><th className="num">Served</th>
+                      <th className="num">Model</th><th className="num">Naive</th>
+                      <th>What we serve</th><th className="num">Mean MWh/day</th>
+                    </tr></thead>
+                    <tbody>
+                      {(v.per_state || []).map((r) => (
+                        <tr key={r.code}>
+                          <td><b>{r.name}</b></td>
+                          <td className="num"><b>{r.served_wape_pct}%</b></td>
+                          <td className="num" style={{ color: "var(--muted)" }}>{r.model_wape_pct}%</td>
+                          <td className="num" style={{ color: "var(--muted)" }}>{r.naive_wape_pct}%</td>
+                          <td><span className={`pill ${String(r.served).startsWith("blend") || r.served === "model" ? "verified" : "hold"}`}>{r.served}</span></td>
+                          <td className="num">{r.mean_mwh?.toLocaleString("en-IN")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </Card>
+        ))}
+      </div>
+
+      <div className="note">
+        <b>Two physics bugs were found building this, and both mattered.</b> The first
+        version fed the model <span className="mono">wind_speed_10m_max</span> — but a
+        turbine's power goes as the <b>cube of hub-height (100 m) speed</b>, so it was
+        being asked to learn a height extrapolation and a cubic at once (38.0% → 34.0%
+        WAPE once fixed). Worse, weather came from the state <i>capital</i> while the
+        fleet sits hundreds of kilometres away: Chennai for a fleet at Muppandal, which
+        is in the Palghat Gap, a monsoon wind tunnel with an unrelated regime. Using
+        fleet coordinates took wind to 29.4%, and <b>Tamil Nadu from 21.8% to 12.7%</b> —
+        the state with the worst geographic error gained the most, which is the
+        confirmation the diagnosis was right.
+      </div>
     </>
   );
 }
