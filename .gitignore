@@ -26,3 +26,10 @@ data/_collector_status.json
 # --- scratch ---
 .DS_Store
 Thumbs.db
+
+# The SQLite store is a GENERATED artifact — rebuilt from scrapes by the
+# pipeline, 110 MB and growing. It was tracked for months, crossed GitHub's
+# 100 MB hard limit, and blocked every push. Never track it again.
+flextrade/data/flextrade.db
+flextrade/data/*.db-wal
+flextrade/data/*.db-shm
