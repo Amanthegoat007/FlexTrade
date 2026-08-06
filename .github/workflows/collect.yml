@@ -49,7 +49,10 @@ permissions:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    # Must exceed LOOP_MINUTES below, or the job is killed mid-loop. It was 8,
+    # which was right for a single shot and would have terminated a 5-hour
+    # collection at minute eight. GitHub's hard cap is 6 hours.
+    timeout-minutes: 340
     steps:
       - uses: actions/checkout@v4
 
@@ -60,48 +63,68 @@ jobs:
       - name: install
         run: pip install --quiet requests pandas
 
-      - name: collect
-        # NO continue-on-error here, and that is deliberate.
+      - name: collect on a 15-minute loop
+        # THE CADENCE FIX.
         #
-        # It used to carry `continue-on-error: true` with the reasoning that a
-        # dead upstream is normal and must not turn into a red build nobody
-        # reads. That reasoning is right for ONE source and catastrophically
-        # wrong for all of them: collect_ci.py exits 1 when it captures nothing,
-        # continue-on-error swallowed it, the commit step then found nothing
-        # staged and cheerfully reported "nothing new captured this tick", and
-        # the workflow went green. Four consecutive scheduled runs passed that
-        # way having written zero rows, which is the exact silent-failure mode
-        # the daily pipeline's health file exists to prevent.
+        # cron cannot deliver every 15 minutes. GitHub's scheduler is
+        # best-effort and throttles: asking for */15 produced runs ~2 hours
+        # apart, about 12 a day against the 96 requested. No cron expression
+        # fixes that, because the limit is on the scheduler and not the syntax.
         #
-        # The script now distinguishes the two cases itself: exit 0 if ANY
-        # source captured, exit 1 only if every one failed. So partial outages
-        # still pass and a total outage is loud.
-        run: python flextrade/collect_ci.py
-
-      - name: commit whatever was captured
+        # So stop relying on the scheduler for frequency and get it INSIDE one
+        # job instead. A job may run up to 6 hours and this repository is
+        # public, so Actions minutes are unlimited — one run can therefore
+        # collect every 15 minutes for hours and cost nothing. The cron then
+        # only has to fire often enough to keep a loop alive, which even a
+        # throttled scheduler manages.
+        #
+        # Committing every tick would put ~96 commits a day on the branch and
+        # make the history unreadable for humans, so ticks are collected and
+        # pushed hourly. The most a cancelled run can lose is the current hour.
+        env:
+          LOOP_MINUTES: "300"        # 5 h, comfortably inside the 6 h job cap
+          EVERY_SECONDS: "900"       # 15 min
+          PUSH_EVERY_TICKS: "4"      # hourly
         run: |
           git config user.name  "flextrade-collector"
           git config user.email "collector@flextrade.local"
+          END=$(( $(date +%s) + 60 * LOOP_MINUTES ))
+          tick=0; captured=0; failed=0
 
-          # A tick that wrote nothing is a bug, not a quiet market — the
-          # sources publish "now" and there is always a "now".
-          rows=$(python -c "import json;print(json.load(open('data/_collector_status.json'))['rows'])" 2>/dev/null || echo 0)
-          echo "collector reported ${rows} rows this tick"
-
-          git add -A data/collected
-          if git diff --cached --quiet; then
-            if [ "${rows}" -gt 0 ]; then
-              echo "::error::collector reported ${rows} rows but git sees no change — check .gitignore is not eating data/collected"
-              exit 1
+          push_now () {
+            git add -A data/collected
+            if git diff --cached --quiet; then
+              echo "::warning::nothing staged after ${tick} ticks"
+              return 0
             fi
-            echo "::warning::no rows captured and nothing to commit"
-            exit 0
-          fi
+            git commit -q -m "collect $(date -u '+%Y-%m-%d %H:%M UTC') (${tick} ticks)"
+            for i in 1 2 3; do
+              git pull --rebase --autostash -q origin "${GITHUB_REF_NAME}" && break
+              sleep 5
+            done
+            git push -q origin "HEAD:${GITHUB_REF_NAME}" && echo "pushed at tick ${tick}"
+          }
 
-          git commit -m "collect $(date -u '+%Y-%m-%d %H:%M UTC') (${rows} rows)"
-          # the schedule can overlap a human push; rebase rather than fail
-          for i in 1 2 3; do
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && break
-            sleep 5
+          while [ "$(date +%s)" -lt "$END" ]; do
+            tick=$((tick + 1))
+            echo "--- tick ${tick} $(date -u '+%H:%M:%S UTC') ---"
+            if python flextrade/collect_ci.py; then
+              captured=$((captured + 1))
+            else
+              failed=$((failed + 1))
+              echo "::warning::tick ${tick} captured nothing"
+            fi
+            [ $((tick % PUSH_EVERY_TICKS)) -eq 0 ] && push_now
+            # do not sleep past the deadline
+            now=$(date +%s)
+            [ $((now + EVERY_SECONDS)) -lt "$END" ] && sleep "$EVERY_SECONDS" || break
           done
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+          push_now
+          echo "loop done: ${tick} ticks, ${captured} captured, ${failed} empty"
+          # Every single tick failing is not a quiet upstream — it is a broken
+          # collector or a runner that cannot reach these hosts.
+          if [ "$captured" -eq 0 ]; then
+            echo "::error::all ${tick} ticks captured nothing — see the probe output above"
+            exit 1
+          fi
