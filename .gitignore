@@ -18,6 +18,10 @@ flextrade/output/web/
 # CI-collected snapshots ARE the data asset — never ignore them
 !data/collected/
 !data/collected/*.csv
+# ...but the per-run status file is not data. It carries a timestamp, so if it
+# lived inside data/collected it would change every tick, always stage, and
+# defeat the empty-tick check that reads it.
+data/_collector_status.json
 
 # --- scratch ---
 .DS_Store

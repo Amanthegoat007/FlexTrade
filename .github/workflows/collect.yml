@@ -17,9 +17,21 @@ name: collect
 # same collector on infrastructure that does not sleep, and commits the result,
 # so coverage stops depending on whether anyone was at their desk.
 #
-# GitHub's scheduler is best-effort and can run late under load, so treat the
-# cadence as "roughly every 15 minutes" rather than exact. Late is fine; the
-# timestamp recorded is the real fetch time, not the scheduled one.
+# MEASURED CADENCE, 6 Aug 2026: the schedule below asks for every 15 minutes.
+# GitHub delivered runs at 07:50, 10:23, 12:23, 14:42 and 16:25 UTC — roughly
+# every two hours, about 12 a day against the 96 requested. The scheduler is
+# best-effort and throttles hard, and this is what it actually gives.
+#
+# Two consequences worth stating rather than discovering later:
+#   - this cannot provide 15-minute resolution. It fixes the laptop's blind
+#     hours (05:00-07:00 were NEVER collected) by covering all 24 hours
+#     sparsely; it does not give dense coverage.
+#   - asking for */15 while receiving 1/120 means runs queue behind each other,
+#     and a queued run in a concurrency group gets cancelled when a newer one
+#     arrives. The "failure" at 16:25 was exactly that: cancelled before any
+#     step ran, no code involved. Harmless, but it will recur.
+# The cron is left at */15 deliberately: it costs nothing, and on a quiet
+# scheduler we occasionally get a denser burst.
 
 on:
   schedule:
@@ -49,24 +61,47 @@ jobs:
         run: pip install --quiet requests pandas
 
       - name: collect
-        # Never fail the workflow on a dead upstream — a source being down is
-        # normal and must not turn into a red build that nobody reads.
-        continue-on-error: true
+        # NO continue-on-error here, and that is deliberate.
+        #
+        # It used to carry `continue-on-error: true` with the reasoning that a
+        # dead upstream is normal and must not turn into a red build nobody
+        # reads. That reasoning is right for ONE source and catastrophically
+        # wrong for all of them: collect_ci.py exits 1 when it captures nothing,
+        # continue-on-error swallowed it, the commit step then found nothing
+        # staged and cheerfully reported "nothing new captured this tick", and
+        # the workflow went green. Four consecutive scheduled runs passed that
+        # way having written zero rows, which is the exact silent-failure mode
+        # the daily pipeline's health file exists to prevent.
+        #
+        # The script now distinguishes the two cases itself: exit 0 if ANY
+        # source captured, exit 1 only if every one failed. So partial outages
+        # still pass and a total outage is loud.
         run: python flextrade/collect_ci.py
 
       - name: commit whatever was captured
         run: |
           git config user.name  "flextrade-collector"
           git config user.email "collector@flextrade.local"
-          git add -A data/collected || true
+
+          # A tick that wrote nothing is a bug, not a quiet market — the
+          # sources publish "now" and there is always a "now".
+          rows=$(python -c "import json;print(json.load(open('data/_collector_status.json'))['rows'])" 2>/dev/null || echo 0)
+          echo "collector reported ${rows} rows this tick"
+
+          git add -A data/collected
           if git diff --cached --quiet; then
-            echo "nothing new captured this tick"
-          else
-            git commit -m "collect $(date -u '+%Y-%m-%d %H:%M UTC')"
-            # the schedule can overlap a human push; rebase rather than fail
-            for i in 1 2 3; do
-              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && break
-              sleep 5
-            done
-            git push origin "HEAD:${GITHUB_REF_NAME}"
+            if [ "${rows}" -gt 0 ]; then
+              echo "::error::collector reported ${rows} rows but git sees no change — check .gitignore is not eating data/collected"
+              exit 1
+            fi
+            echo "::warning::no rows captured and nothing to commit"
+            exit 0
           fi
+
+          git commit -m "collect $(date -u '+%Y-%m-%d %H:%M UTC') (${rows} rows)"
+          # the schedule can overlap a human push; rebase rather than fail
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && break
+            sleep 5
+          done
+          git push origin "HEAD:${GITHUB_REF_NAME}"

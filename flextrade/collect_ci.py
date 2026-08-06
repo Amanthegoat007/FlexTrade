@@ -16,6 +16,7 @@ stack, so a CI runner needs no LightGBM, no SQLite file and no secrets.
 from __future__ import annotations
 
 import csv
+import json
 import sys
 import traceback
 from datetime import datetime, timezone
@@ -25,6 +26,7 @@ import requests
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "collected"
+STATUS = ROOT / "data" / "_collector_status.json"   # outside the committed dir
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120"}
 TIMEOUT = 45
 
@@ -154,19 +156,76 @@ def area_price() -> int:
 
 SOURCES = [("merit", merit), ("upsldc", upsldc), ("area_price", area_price)]
 
+HOSTS = ["meritindia.in", "www.upsldc.org", "vidyutpravah.in"]
+
+
+def probe() -> None:
+    """Report whether each upstream is even reachable from THIS machine.
+
+    Exists because the collector ran green on GitHub for four consecutive
+    scheduled runs while capturing nothing, and there was no way to tell a dead
+    upstream from a runner that cannot reach Indian infrastructure at all.
+    These are government and utility sites; several are known to treat foreign
+    datacentre IPs differently from Indian residential ones, and the laptop
+    (which works) and the runner (which does not) differ in exactly that way.
+
+    Printed on every run so the log answers the question by itself.
+    """
+    import socket
+    for host in HOSTS:
+        try:
+            ip = socket.gethostbyname(host)
+        except Exception as e:
+            print(f"  probe {host:20s} DNS FAIL  {type(e).__name__}")
+            continue
+        try:
+            r = requests.get(f"https://{host}/", headers=UA, timeout=20,
+                             verify=False, allow_redirects=True)
+            print(f"  probe {host:20s} {ip:15s} HTTP {r.status_code} "
+                  f"{len(r.content):,}B")
+        except Exception as e:
+            print(f"  probe {host:20s} {ip:15s} UNREACHABLE "
+                  f"{type(e).__name__}: {str(e)[:70]}")
+
 
 def main() -> int:
-    ok = 0
+    import urllib3
+    urllib3.disable_warnings()
+    print(f"{_now()}  reachability from this runner:")
+    probe()
+    ok, rows_total, detail = 0, 0, {}
     for name, fn in SOURCES:
         try:
             n = fn()
             print(f"{_now()}  {name:11s} OK   {n} rows")
+            detail[name] = n
+            rows_total += n
             ok += 1
         except Exception as e:
             # one dead source must never cost us the others
-            print(f"{_now()}  {name:11s} FAIL {type(e).__name__}: {str(e)[:120]}")
-    print(f"{_now()}  ---> {ok}/{len(SOURCES)} sources captured")
-    return 0 if ok else 1
+            print(f"{_now()}  {name:11s} FAIL {type(e).__name__}: {str(e)[:200]}")
+            detail[name] = f"{type(e).__name__}: {str(e)[:200]}"
+    print(f"{_now()}  ---> {ok}/{len(SOURCES)} sources captured, "
+          f"{rows_total} rows written")
+
+    # Machine-readable outcome so the workflow can distinguish "upstream quiet"
+    # from "collector produced nothing", which a green checkmark cannot.
+    #
+    # Deliberately NOT inside data/collected: the workflow stages that whole
+    # directory, and a status file carrying a timestamp changes on every tick —
+    # so it would always look like new data, always commit, and defeat the very
+    # empty-tick check it exists to feed.
+    STATUS.parent.mkdir(parents=True, exist_ok=True)
+    STATUS.write_text(json.dumps({
+        "at_utc": _now(), "sources_ok": ok, "sources_total": len(SOURCES),
+        "rows": rows_total, "detail": detail}, indent=1), encoding="utf-8")
+
+    if ok == 0:
+        print("FATAL: every source failed. That is not a quiet upstream — it is "
+              "a broken collector or a runner that cannot reach these hosts. "
+              "Failing loudly so this does not sit green and empty.")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
