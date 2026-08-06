@@ -735,6 +735,28 @@ def export_stress():
         _dump("stress.json", {"error": f"{type(e).__name__}: {e}"})
 
 
+def export_ists_rule():
+    """Regulatory scenario: what the draft ISTS charging restriction costs.
+
+    Served from the cached artifact rather than recomputed here. The run is
+    ~2,900 LP solves and takes a quarter of an hour; a rule that changes a few
+    times a year does not belong in a pipeline that has to finish before the
+    12:00 DAM gate. Refresh with `python models/ists_rule.py 365`.
+    """
+    src = OUT / "ists_rule.json"
+    if not src.exists():
+        _dump("ists_rule.json", {"error": "not computed yet — run "
+                                          "`python models/ists_rule.py 365`"})
+        return
+    try:
+        payload = json.loads(src.read_text())
+        payload["stale_note"] = ("regulatory scenario, recomputed on demand "
+                                 "rather than every pipeline run")
+        _dump("ists_rule.json", payload)
+    except Exception as e:
+        _dump("ists_rule.json", {"error": f"{type(e).__name__}: {e}"})
+
+
 def export_re_state():
     """Real RE forecast on MEASURED generation — distinct from the twin.
 
@@ -963,6 +985,7 @@ if __name__ == "__main__":
         export_bankability()
         export_re_state()
         export_stress()
+        export_ists_rule()
         export_dsm_state()
         export_sqlite_series()
         export_meta()
@@ -982,5 +1005,6 @@ if __name__ == "__main__":
         export_bankability()
         export_re_state()
         export_stress()
+        export_ists_rule()
         export_dsm_state()
         export_meta()  # re-dump so freshness reflects the fetches above
