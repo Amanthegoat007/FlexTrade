@@ -1,6 +1,12 @@
-P10  pinball   175.0 Rs/MWh   coverage   6.5% (nominal 10%)
-P50  pinball   468.8 Rs/MWh   coverage  14.2% (nominal 50%)
-P90  pinball   504.3 Rs/MWh   coverage 100.0% (nominal 90%)
+P10  pinball   148.4 Rs/MWh   PIT  21.7% (nominal 10%)
+P50  pinball   316.5 Rs/MWh   PIT  56.1% (nominal 50%)
+P90  pinball   168.0 Rs/MWh   PIT  91.7% (nominal 90%)
 
-raw P10-P90: 93.8% inside (nominal 80%), mean width Rs 6,300/MWh
-asymmetric CQR P10-P90: 94.4% inside (target 80%), mean width Rs 6,362/MWh   [log-margins lo +0.017, hi +0.000]
+raw P10-P90: 86.6% inside (nominal 80%), mean width Rs 1,801/MWh
+coherence  E[mixture] vs point model: Rs 216/MWh (16.0% of actual)   |   mean-median skew Rs -225/MWh (expected > 0: atom at the cap)
+
+adaptive regime-conditional band, walk-forward over 51 days:
+  coverage 84.1% (target 80%)   mean width Rs 1,770/MWh   worst 30d 82.1%
+  P(cap) 0.00-0.05  n 3,093  cov 80.2%  m_lo -0.050  m_hi -0.016
+  P(cap) 0.05-0.60  n   579  cov 80.3%  m_lo -0.028  m_hi +0.000
+  P(cap) 0.60-1.01  n 1,224  cov 95.8%  m_lo -0.000  m_hi +0.000

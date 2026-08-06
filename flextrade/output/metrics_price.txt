@@ -1,4 +1,4 @@
 cap-hurdle two-stage (P(cap) x below-cap regression)
-train  MAPE 10.06%   RMSE   520.5 Rs/MWh   corr 0.980   evening MAPE  8.37%
-val    MAPE 23.73%   RMSE  1136.0 Rs/MWh   corr 0.951   evening MAPE 11.69%
-test   MAPE 21.82%   RMSE  1312.4 Rs/MWh   corr 0.937   evening MAPE 11.31%
+train  MAPE 13.83%   RMSE   614.3 Rs/MWh   corr 0.975   evening MAPE  9.90%
+val    MAPE 19.77%   RMSE  1276.0 Rs/MWh   corr 0.942   evening MAPE  9.29%
+test   MAPE 20.40%   RMSE  1342.3 Rs/MWh   corr 0.932   evening MAPE 12.18%

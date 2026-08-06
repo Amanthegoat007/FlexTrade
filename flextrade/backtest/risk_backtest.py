@@ -34,31 +34,30 @@ OUT = HERE.parent / "output"
 OUT.mkdir(exist_ok=True)
 
 
-def _quantile_frame(part: pd.DataFrame, margin: float) -> pd.DataFrame:
-    """Conformal P10/P50/P90 for one day's feature rows."""
-    cols = {}
-    for q in price_model.QUANTILES:
-        b = lgb.Booster(model_file=str(price_model.QMODEL_PATH).format(q=q * 100))
-        p = np.clip(np.exp(b.predict(part[price_model.FEATURES])), 0, 10000)
-        cols[f"q{q * 100:02.0f}"] = p
-    qf = pd.DataFrame(cols, index=part.index)
-    lo, hi = qf.columns[0], qf.columns[-1]
-    qf[lo] = (qf[lo] * np.exp(-margin)).clip(0, 10000)
-    qf[hi] = (qf[hi] * np.exp(margin)).clip(0, 10000)
-    qf[:] = np.sort(qf.values, axis=1)
-    return qf
+def _quantile_frame(part: pd.DataFrame, cfg: dict | None) -> pd.DataFrame:
+    """Calibrated P10/P50/P90 for one day's feature rows.
+
+    Delegates the band to price_model.apply_band rather than re-implementing
+    it. The private copy that used to live here drifted out of sync: it read a
+    config key ("log_margin") that stopped being written on 2 Aug, so this
+    module raised KeyError on every run from then on while the dashboard went
+    on serving its last successful output as if it were current.
+    """
+    qf, pi = price_model.mixture_quantiles(part, price_model.QUANTILES)
+    return price_model.apply_band(qf, pi, cfg)
 
 
 def run(test_days: int = 60, bess: Bess = Bess(), lam: float = 0.5,
         n_scenarios: int = 24) -> pd.DataFrame:
-    import json
-    margin = json.loads(price_model.CONFORMAL_PATH.read_text())["log_margin"] \
-        if price_model.CONFORMAL_PATH.exists() else 0.0
+    cfg = price_model.load_conformal()
 
     f = price_model.build_features(price_model._table())
     f = f.dropna(subset=price_model.FEATURES + ["mcp_rs_mwh"])
-    point = lgb.Booster(model_file=str(price_model.MODEL_PATH))
-    f["mcp_pred"] = np.clip(np.exp(point.predict(f[price_model.FEATURES])), 0, 10000)
+    # The production point forecast, cap hurdle included. This used to call the
+    # stage-2 booster directly, which drops the P(cap) stage entirely — so the
+    # point baseline the stochastic optimizer was measured against was weaker
+    # than the one production actually runs, flattering every comparison here.
+    f["mcp_pred"] = price_model.predict_hurdle(f)
     test = f[f.index >= f.index.max().normalize() - pd.Timedelta(days=test_days)]
 
     rows = []
@@ -66,7 +65,7 @@ def run(test_days: int = 60, bess: Bess = Bess(), lam: float = 0.5,
         if len(g) != 96:
             continue
         act = g["mcp_rs_mwh"]
-        qf = _quantile_frame(g, margin)
+        qf = _quantile_frame(g, cfg)
         scen = sto.make_scenarios(qf, n_scenarios=n_scenarios)
 
         sched_pt, _ = optimize_dispatch(g["mcp_pred"], bess)

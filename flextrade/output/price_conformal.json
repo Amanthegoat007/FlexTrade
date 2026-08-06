@@ -1,13 +1,54 @@
 {
-  "mode": "asymmetric",
-  "log_margin_lo": 0.016881643741201845,
-  "log_margin_hi": 0.0,
+  "mode": "adaptive-regime",
   "q_lo": 0.1,
   "q_hi": 0.9,
-  "calibration_n": 2880,
-  "raw_coverage_pct": 93.8,
-  "conformal_coverage_pct": 94.4,
-  "raw_width_rs_mwh": 6300.0,
-  "conformal_width_rs_mwh": 6362.0,
-  "note": "Asymmetric because the price cap makes the band one-sided: the P90 head is essentially never exceeded, so its width was waste rather than protection."
+  "target_coverage_pct": 80.0,
+  "regime_edges": [
+    0.0,
+    0.05,
+    0.6,
+    1.01
+  ],
+  "regimes": [
+    {
+      "lo_edge": 0.0,
+      "hi_edge": 0.05,
+      "m_lo": -0.0502,
+      "m_hi": -0.016,
+      "tail_lo": 0.1075,
+      "tail_hi": 0.1108,
+      "blocks": 3093,
+      "coverage_pct": 80.2
+    },
+    {
+      "lo_edge": 0.05,
+      "hi_edge": 0.6,
+      "m_lo": -0.0281,
+      "m_hi": 0.0,
+      "tail_lo": 0.0907,
+      "tail_hi": 0.1213,
+      "blocks": 579,
+      "coverage_pct": 80.3
+    },
+    {
+      "lo_edge": 0.6,
+      "hi_edge": 1.01,
+      "m_lo": -0.0,
+      "m_hi": 0.0,
+      "tail_lo": 0.1651,
+      "tail_hi": 0.194,
+      "blocks": 1224,
+      "coverage_pct": 95.8
+    }
+  ],
+  "log_margin_lo": -0.0,
+  "log_margin_hi": 0.0,
+  "walk_days": 51,
+  "walk_coverage_pct": 84.1,
+  "walk_worst_30d_pct": 82.1,
+  "walk_worst_regime_pct": 80.2,
+  "mean_width_rs_mwh": 1770.0,
+  "trail_days": 45,
+  "aci_gamma": 0.02,
+  "note": "Walk-forward coverage, not single-window. The previous static margin reported 94.4% but measured 74.7% under a rolling origin with retrained heads; this is calibrated per cap-regime and adapts online to seasonal drift."
 }

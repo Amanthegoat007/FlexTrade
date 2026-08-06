@@ -51,11 +51,11 @@ export default function TradingDesk() {
         <Stat label="Block bids" info="DAM, MCV" value={bids.length} hint="of 96 blocks; rest idle" />
         <Stat label="Peak load forecast" value={plan.peak_load_mw?.toLocaleString("en-IN")} unit="MW"
           hint="Delhi system peak, day-ahead" />
-        <Stat label="Forecast band" info="P10, P90, CQR" value={quants.length ? "P10–P90" : "—"}
+        <Stat label="Forecast band" info="P10, P90, walk-forward" value={quants.length ? "P10–P90" : "—"}
           hint={h.price_band_coverage_pct
-            ? `${h.price_band_coverage_pct}% coverage vs 80% target · ₹${Number(h.price_band_width_rs_mwh || 0).toLocaleString("en-IN")}/MWh wide`
-            : "conformal-calibrated band"}
-          infoText="Read coverage WITH width. This band over-covers — ~94% against an 80% target — because Indian DAM prices saturate at the Rs 10,000 cap: on cap blocks the P90 head predicts the cap and is never exceeded, so no single multiplicative calibration can tighten it without breaking the cap blocks where it is already correct. Over-covering is the conservative direction; it overstates uncertainty rather than understating it. A regime-conditional margin keyed on P(cap) is the proper fix and is not yet built." />
+            ? `${h.price_band_coverage_pct}% coverage vs ${h.price_band_target_pct ?? 80}% target · ₹${Number(h.price_band_width_rs_mwh || 0).toLocaleString("en-IN")}/MWh wide`
+            : "calibrated band"}
+          infoText={`Coverage is measured WALK-FORWARD over ${h.price_band_walk_days ?? "—"} days, not on a single window — the band is recalibrated each day and scored on the next, so this is the number the desk actually gets. Worst rolling 30 days: ${h.price_band_worst_30d_pct ?? "—"}%. Worst individual cap-regime: ${h.price_band_worst_regime_pct ?? "—"}%. Both clear the 80% target, which is the property that matters: a band can average 80% while failing badly in the regime you trade against. Two mechanisms get it there — quantiles of the censored mixture (a point mass at the ₹10,000 cap plus the below-cap law, so P90 stops collapsing onto the cap when cap risk is near zero), and an adaptive per-regime margin that tracks seasonal drift in how often the cap binds. An earlier version of this panel reported ~94% from one favourable 60-day slice; re-measured under a rolling origin that construction delivered 74.7%, and it was replaced.`} />
       </div>
 
       {quants.length > 0 && (

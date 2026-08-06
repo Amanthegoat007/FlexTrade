@@ -27,16 +27,16 @@ const kpiGlossary = (h = {}) => [
     "RTM intraday: 26.6% served, vs 33.0% for the hour-ratio it replaced."],
   ["Pinball loss", "The proper scoring rule for a quantile forecast — penalises a P90 that gets exceeded more than 10% of the time.",
     "Reported per quantile in the quantile metrics below."],
-  ["Coverage", "% of actual outcomes falling inside the predicted band. A calibrated P10–P90 band should cover ~80%.",
-    `Price band ${n(h.price_band_coverage_pct, 1)}% vs 80% nominal — but ${
-      h.price_band_width_rs_mwh ? `₹${Number(h.price_band_width_rs_mwh).toLocaleString("en-IN")}/MWh wide` : "very wide"
-    }, so read it with the width. Delhi load band: 84.2% at 605 MW.`],
+  ["Coverage", "% of actual outcomes falling inside the predicted band — measured walk-forward (recalibrate each day, score the next), never on a single window. A calibrated P10–P90 band should cover ~80%, and it should do so inside every regime, not just on average.",
+    `Price band ${n(h.price_band_coverage_pct, 1)}% vs ${h.price_band_target_pct ?? 80}% nominal over ${h.price_band_walk_days ?? "—"} days, at ${
+      h.price_band_width_rs_mwh ? `₹${Number(h.price_band_width_rs_mwh).toLocaleString("en-IN")}/MWh` : "—"
+    } wide — worst rolling 30 days ${n(h.price_band_worst_30d_pct, 1)}%, worst cap-regime ${n(h.price_band_worst_regime_pct, 1)}%. Delhi load band: 84.2% at 605 MW.`],
   ["Capture ratio", "Backtest P&L ÷ perfect-foresight P&L — the single best summary of forecast + optimizer quality together.",
     `${n(h.capture_ratio_pct, 1)}% with the cap-hurdle point model (${h.backtest_days ?? "—"}-day walk-forward).`],
   ["Uplift", "FlexTrade P&L − customer's baseline (static EMS) P&L. This is the revenue-share billing base (business model §3.4).",
     `+${lakh(h.uplift_rs)} over ${h.backtest_days ?? "—"} days, +${n(h.uplift_pct, 1)}%.`],
   ["CVaR", "Conditional Value-at-Risk — mean P&L of the worst 10% of scenarios. What an asset owner with debt covenants actually cares about.",
-    "Optimized via the Rockafellar–Uryasev linearization; currently OFF by default because it measured worse."],
+    "Optimized via the Rockafellar–Uryasev linearization. Still OFF by default, but its earlier rejection no longer stands: that verdict (−9.4% mean/day, −44.8% worst day) was measured against a misspecified price distribution. Re-run on the censored-mixture band it is −0.4% mean/day for +3.6% on the P10 day and −3.2% volatility — roughly a fair trade of mean for tail. 51 days is too few to switch the default on; it is being re-evaluated as the walk-forward window grows."],
   ["Normal Rate (NR)", "The DSM reference price: ⅓ DAM + ⅓ RTM + ⅓ ancillary charge (CERC 2024, Reg. 14). Deviations are priced off real market outcomes.",
     "Computed from live IEX prices; the ancillary leg is proxied by RTM (no public feed) and flagged in every result."],
   ["DSM saved", "Penalty under FlexTrade's schedule minus penalty under naive persistence, both settled identically.",

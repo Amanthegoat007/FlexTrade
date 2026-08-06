@@ -204,15 +204,24 @@ def _headline(metrics: dict) -> dict:
             (out["backtest_lp_rs"] / out["backtest_greedy_rs"] - 1) * 100, 1)
 
     conf = metrics.get("conformal") or {}
-    out["price_band_coverage_pct"] = conf.get("conformal_coverage_pct")
-    out["price_band_raw_coverage_pct"] = conf.get("raw_coverage_pct")
-    out["price_band_log_margin"] = conf.get("log_margin")
+    # Walk-forward coverage, not single-window. The old key reported 94.4% from
+    # one favourable 60-day slice; measured under a rolling origin the same
+    # construction delivered 74.7%. Publishing the flattering number was the
+    # actual defect, so the honest one is what the dashboard now reads.
+    out["price_band_coverage_pct"] = conf.get("walk_coverage_pct")
+    out["price_band_worst_30d_pct"] = conf.get("walk_worst_30d_pct")
+    out["price_band_worst_regime_pct"] = conf.get("walk_worst_regime_pct")
+    out["price_band_target_pct"] = conf.get("target_coverage_pct")
+    out["price_band_walk_days"] = conf.get("walk_days")
+    out["price_band_mode"] = conf.get("mode")
+    out["price_band_regimes"] = conf.get("regimes")
 
-    # the price band's width, which the coverage number alone hides
-    qtext = metrics.get("price_quantiles") or ""
-    mm = re.search(r"(?:asymmetric )?(?:CQR )?P10-P90.*?mean width Rs\s*([\d,]+)",
-                   qtext.split("raw P10-P90")[-1])
-    out["price_band_width_rs_mwh"] = float(mm.group(1).replace(",", "")) if mm else None
+    # The width the coverage number alone hides. Read from the calibration JSON
+    # rather than scraped back out of the printed report: the report's wording
+    # changed with the band rewrite and the old regex silently returned None,
+    # which is exactly how a dashboard ends up showing a blank where a headline
+    # metric should be.
+    out["price_band_width_rs_mwh"] = conf.get("mean_width_rs_mwh")
     return out
 
 

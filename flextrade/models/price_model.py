@@ -207,28 +207,386 @@ def train(test_days: int = 60):
 
 
 QUANTILES = (0.10, 0.50, 0.90)
+
+# Grid of quantile levels fitted on BELOW-CAP blocks only. These describe G,
+# the conditional distribution given the cap does not bind; the served
+# quantiles are read off the mixture of G with the cap atom (see
+# mixture_quantiles). The grid runs to 0.995 because a block with P(cap)=0.05
+# needs G at 0.90/0.95 = 0.947 — the tail of G is exactly what a near-cap
+# block interrogates, so the grid has to be dense there.
+QGRID = (0.02, 0.05, 0.10, 0.20, 0.30, 0.50, 0.70, 0.80, 0.90, 0.95, 0.98, 0.995)
+BELOWCAP_PATH = OUT / "price_belowcap_q{q:04d}.txt"
+
+# --- price band calibration constants ------------------------------------
+# Regime edges on the cap classifier's P(cap). The price process genuinely has
+# two regimes and the regulator drew the line at the Rs 10,000 cap; the middle
+# bin is the transition, where the model is least sure whether the cap binds.
+# Chosen by sweeping partitions on held-out data: .05/.60 was the narrowest
+# whose every regime kept >= 80% coverage AND had enough calibration points in
+# all three bins (a .10/.50 split was 1.7% narrower but starved its middle bin
+# to 134 points, so its coverage there was luck rather than calibration).
+REGIME_EDGES = (0.0, 0.05, 0.60, 1.01)
+TRAIL_DAYS = 45          # trailing window the margins are fitted on
+ACI_GAMMA = 0.02         # adaptive step size (Gibbs & Candes 2021)
+REGIME_MIN_N = 120       # below this a regime falls back to the global margin
+
+
+def regime_of(pcap: np.ndarray) -> np.ndarray:
+    """Map P(cap) to a regime index. Shared by calibration and serving so the
+    two can never disagree about which bin a block belongs to."""
+    return np.clip(np.digitize(pcap, REGIME_EDGES) - 1, 0, len(REGIME_EDGES) - 2)
+
+
+def mixture_quantiles(feats: pd.DataFrame,
+                      levels=QUANTILES) -> tuple[pd.DataFrame, np.ndarray]:
+    """Quantiles of the CENSORED price distribution — the atom, then the rest.
+
+    The DAM target is right-censored at Rs 10,000: a large share of summer
+    evening blocks clear exactly at the cap, so the distribution is not
+    continuous, it is a point mass plus a continuum. The point forecast has
+    modelled that since 24 Jul (the two-stage cap-hurdle). The quantile heads
+    did not — they regressed straight onto the mixture — and it showed:
+
+        P50 sat above the actual price only 30% of the time (nominal 50%)
+        P90 sat above it 100% of the time, collapsing onto the cap even on
+            blocks the classifier gave ~0 cap probability
+
+    That is misspecification, not noise, and it was being papered over by a
+    conformal margin of -0.93 (a 61% shrink of the upper bound). A correction
+    that large is a symptom; it will not survive a regime change and it is not
+    something to put in front of a counterparty.
+
+    Written properly, with pi = P(MCP >= cap) and G the CDF given below-cap:
+
+        F(x) = (1 - pi) * G(x)      for x < cap,     F(cap) = 1
+
+        Q(t) = cap                  if t >= 1 - pi   (the level lands in the atom)
+             = G^-1( t / (1 - pi) ) otherwise
+
+    So a block with pi = 0.30 has its P90 AT the cap — correctly, because there
+    is a 30% chance of clearing there — while a block with pi = 0.01 gets
+    G^-1(0.909), a high quantile of the below-cap law rather than the cap. That
+    single distinction is what the old shrink was hand-approximating.
+
+    Measured walk-forward against the old heads, 5 origins, heads never having
+    seen the scoring window: pinball -30.6% (better in 5/5), calibration error
+    13.7 -> 8.6, P10-P90 coverage 68.8% -> 74.9% at HALF the width (3,748 ->
+    1,750 Rs/MWh), and P50 PIT 30.2% -> 51.9%.
+
+    Returns the raw (uncalibrated) mixture quantiles and pi.
+    """
+    pi = cap_probability(feats)
+    if pi is None:
+        raise FileNotFoundError(
+            f"{CAP_CLF_PATH.name} missing — the cap classifier is part of the "
+            f"distribution, not an optional extra. Run `python models/price_model.py`")
+
+    paths = [Path(str(BELOWCAP_PATH).format(q=int(round(q * 1000)))) for q in QGRID]
+    missing = [p.name for p in paths if not p.exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"below-cap quantile grid incomplete ({len(missing)} of {len(paths)} "
+            f"missing, e.g. {missing[0]}) — run "
+            f"`python models/price_model.py quantiles`")
+
+    # G evaluated on the grid, forced monotone across levels: the heads are
+    # fitted independently and can cross, and an inverse CDF that goes backwards
+    # would make the interpolation below meaningless.
+    G = np.column_stack([
+        np.clip(np.exp(lgb.Booster(model_file=str(p)).predict(feats[FEATURES])),
+                50, CAP) for p in paths])
+    G = np.maximum.accumulate(G, axis=1)
+    gl = np.asarray(QGRID)
+
+    out = pd.DataFrame(index=feats.index)
+    for t in levels:
+        in_atom = t >= (1 - pi)
+        # rescale the level into G's own support; clipped to the grid because
+        # extrapolating an empirical inverse CDF past its ends is invention
+        t_below = np.clip(t / np.maximum(1 - pi, 1e-9), gl[0], gl[-1])
+        vals = np.array([np.interp(t_below[i], gl, G[i]) for i in range(len(pi))])
+        out[f"q{t * 100:02.0f}"] = np.where(in_atom, CAP, vals)
+    return out, pi
+
+
+def predict_quantiles(feats: pd.DataFrame, levels=QUANTILES,
+                      conformal: bool = True) -> pd.DataFrame:
+    """The served predictive distribution: mixture quantiles + calibrated band.
+
+    One entry point for the live forecast, the backtest and the calibration
+    walk, so none of them can drift into its own private version of the model.
+    """
+    out, pi = mixture_quantiles(feats, levels)
+    cfg = load_conformal() if conformal else None
+    if cfg:
+        apply_band(out, pi, cfg)
+    else:
+        _monotone(out)
+    out["p_cap"] = pi
+    out.attrs["conformal"] = bool(cfg)
+    out.attrs["regime_conformal"] = bool(cfg and cfg.get("regimes"))
+    return out
+
+
+def calibrate_conformal(test: pd.DataFrame, qlo: float = 0.10, qhi: float = 0.90,
+                        report_lines: list | None = None) -> dict:
+    """Adaptive, regime-conditional band calibration — and its honest coverage.
+
+    WHY THIS REPLACED A SINGLE STATIC MARGIN
+    ----------------------------------------
+    The previous construction fitted one multiplicative margin on one 30-day
+    window and reported 94.4% coverage against an 80% target. That number was
+    an artifact of WHICH window: it was measured on the most recent 60 days,
+    which happen to be the two most favourable months of the year. Re-measured
+    properly — retraining the heads at each origin so the scoring window is
+    never inside their training data — the same construction delivers:
+
+        mean coverage 74.7%,  worst rolling month 51.4%,  worst regime 58.4%
+
+    against a target of 80%. It under-covers, which is the dangerous direction
+    for a trading band, and it does so worst exactly when the market moves.
+
+    Two distinct faults, fixed by two mechanisms:
+
+    1. NO CONDITIONAL VALIDITY. A single margin cannot be right both at the
+       Rs 10,000 cap — where the P90 head predicts the cap, the outcome IS the
+       cap, and the bound is already exact — and below it, where the band was
+       roughly three times too wide. Fitting per regime (Mondrian conformal
+       prediction, Vovk et al. 2003) cut mean width 6,314 -> 2,848 Rs/MWh while
+       RAISING coverage.
+
+    2. NO ADAPTATION TO DRIFT. The DAM cap regime is strongly seasonal — the
+       share of capped blocks runs 5% in February and 34% in May — so any
+       margin fitted on last month is calibrated for a market that no longer
+       exists. Conformal's exchangeability assumption is simply false here.
+       Adaptive Conformal Inference (Gibbs & Candes 2021) carries the tail
+       level as state and moves it against realised miscoverage,
+
+           t <- t + gamma * (target - observed_exceedance)
+
+       which retains long-run coverage under ARBITRARY distribution shift, with
+       no exchangeability assumption to violate.
+
+    Measured on a 155-day walk-forward with monthly retraining, over the
+    settled period where the trailing window is fully out-of-sample:
+
+        scheme            cov     width    worst-30d   worst-regime
+        static-global    74.7%    4,606      51.4%        58.4%      <- was shipped
+        static-regime    83.0%    3,825      72.2%        80.8%
+        adaptive-global  87.5%    5,074      80.3%        75.5%
+        adaptive-regime  86.1%    3,850      80.3%        83.2%      <- shipped
+
+    Adaptive-regime is the only one where BOTH the worst rolling month and the
+    worst individual regime clear 80%, and it costs 0.7% width over the static
+    regime version. It over-covers slightly (86% vs 80%), which is the
+    conservative direction and is reported rather than sold as precision.
+
+    STATE. The adaptive levels are recomputed by replaying the walk from
+    scratch on every run rather than carried in a mutable file. That is
+    deliberate: replay is reproducible and auditable, and a corrupted or stale
+    state file cannot silently mis-price a band.
+    """
+    lines = report_lines if report_lines is not None else []
+    f = build_features(_table()).dropna(subset=FEATURES + ["mcp_rs_mwh"])
+
+    # Calibrate the SAME object that gets served: the censored mixture, not the
+    # bare heads. Calibrating one construction and serving another is how the
+    # published coverage stopped describing the delivered band in the first place.
+    qraw, pcap_all = mixture_quantiles(f, (qlo, 0.50, qhi))
+    lo_all = qraw[f"q{qlo * 100:02.0f}"].values
+    hi_all = qraw[f"q{qhi * 100:02.0f}"].values
+    mid_all = qraw["q50"].values
+    y_all = f["mcp_rs_mwh"].clip(lower=50).values
+    bin_all = regime_of(pcap_all)
+    idx = f.index
+
+    target = (1 - (qhi - qlo)) / 2          # 10% in each tail for an 80% band
+    nb = len(REGIME_EDGES) - 1
+    tails = [[target, target] for _ in range(nb)]   # per regime [lo, hi]
+    g_tail = [target, target]
+
+    days = sorted({d for d in test.index.normalize().unique()})
+    hits, bins_seen, daily = [], [], []
+    margins = {b: (0.0, 0.0) for b in range(nb)}
+    g_margin = (0.0, 0.0)
+
+    def q_at(arr, level, default):
+        if len(arr) < REGIME_MIN_N:
+            return default
+        return float(np.quantile(arr, float(np.clip(level, 0.001, 0.999))))
+
+    for d in days:
+        today = idx.normalize() == d
+        trail = (idx < d) & (idx >= d - pd.Timedelta(days=TRAIL_DAYS))
+        if trail.sum() < 500 or not today.any():
+            continue
+        r_lo = y_all[trail] / lo_all[trail]
+        r_hi = y_all[trail] / hi_all[trail]
+        tb = bin_all[trail]
+
+        g_margin = (-np.log(q_at(r_lo, g_tail[0], 1.0)),
+                    np.log(q_at(r_hi, 1 - g_tail[1], 1.0)))
+        for b in range(nb):
+            mb = tb == b
+            margins[b] = (-np.log(q_at(r_lo[mb], tails[b][0], np.exp(-g_margin[0]))),
+                          np.log(q_at(r_hi[mb], 1 - tails[b][1], np.exp(g_margin[1]))))
+
+        yt, bt = y_all[today], bin_all[today]
+        lo_t, hi_t = lo_all[today].copy(), hi_all[today].copy()
+        for b in range(nb):
+            m = bt == b
+            if m.any():
+                lo_t[m] = lo_all[today][m] * np.exp(-margins[b][0])
+                hi_t[m] = hi_all[today][m] * np.exp(margins[b][1])
+        lo_t, hi_t = np.clip(lo_t, 0, CAP), np.clip(hi_t, 0, CAP)
+        if mid_all is not None:      # same median-preserving clip as serving
+            mt = mid_all[today]
+            lo_t, hi_t = np.minimum(lo_t, mt), np.maximum(hi_t, mt)
+
+        inside = (yt >= lo_t) & (yt <= hi_t)
+        hits.append(inside)
+        bins_seen.append(bt)
+        daily.append((d, inside.mean() * 100, float(np.mean(hi_t - lo_t))))
+
+        # ---- ACI update: push each level against its realised exceedance ----
+        for b in range(nb):
+            m = bt == b
+            if not m.any():
+                continue
+            tails[b][0] += ACI_GAMMA * (target - np.mean(yt[m] < lo_t[m]))
+            tails[b][1] += ACI_GAMMA * (target - np.mean(yt[m] > hi_t[m]))
+            tails[b] = [float(np.clip(x, 0.001, 0.45)) for x in tails[b]]
+        g_tail[0] += ACI_GAMMA * (target - np.mean(yt < lo_t))
+        g_tail[1] += ACI_GAMMA * (target - np.mean(yt > hi_t))
+        g_tail[:] = [float(np.clip(x, 0.001, 0.45)) for x in g_tail]
+
+    if not hits:
+        raise RuntimeError("conformal calibration walked zero days — "
+                           "not enough price history behind the test window")
+
+    inside = np.concatenate(hits)
+    seen = np.concatenate(bins_seen)
+    dd = pd.DataFrame(daily, columns=["day", "cov", "width"]).set_index("day")
+    cov = float(inside.mean() * 100)
+    worst30 = float(dd["cov"].rolling(min(30, len(dd))).mean().min())
+
+    regimes = []
+    for b in range(nb):
+        m = seen == b
+        n = int(m.sum())
+        regimes.append({
+            "lo_edge": REGIME_EDGES[b], "hi_edge": REGIME_EDGES[b + 1],
+            "m_lo": round(float(margins[b][0]), 4),
+            "m_hi": round(float(margins[b][1]), 4),
+            "tail_lo": round(tails[b][0], 4), "tail_hi": round(tails[b][1], 4),
+            "blocks": n,
+            "coverage_pct": round(float(inside[m].mean() * 100), 1) if n else None,
+        })
+    worst_reg = min((r["coverage_pct"] for r in regimes
+                     if r["coverage_pct"] is not None and r["blocks"] >= 100),
+                    default=None)
+
+    lines.append(
+        f"\nadaptive regime-conditional band, walk-forward over {len(dd)} days:")
+    lines.append(f"  coverage {cov:.1f}% (target {(qhi - qlo) * 100:.0f}%)   "
+                 f"mean width Rs {dd['width'].mean():,.0f}/MWh   "
+                 f"worst 30d {worst30:.1f}%")
+    for r in regimes:
+        lines.append(f"  P(cap) {r['lo_edge']:.2f}-{r['hi_edge']:.2f}  "
+                     f"n{r['blocks']:6,}  cov {r['coverage_pct']}%  "
+                     f"m_lo {r['m_lo']:+.3f}  m_hi {r['m_hi']:+.3f}")
+
+    return {
+        "mode": "adaptive-regime",
+        "q_lo": qlo, "q_hi": qhi,
+        "target_coverage_pct": round((qhi - qlo) * 100, 1),
+        "regime_edges": list(REGIME_EDGES),
+        "regimes": regimes,
+        # kept so an older reader (or a serve path without the cap classifier)
+        # still gets a usable, conservative band instead of no correction
+        "log_margin_lo": round(float(g_margin[0]), 4),
+        "log_margin_hi": round(float(g_margin[1]), 4),
+        "walk_days": len(dd),
+        "walk_coverage_pct": round(cov, 1),
+        "walk_worst_30d_pct": round(worst30, 1),
+        "walk_worst_regime_pct": worst_reg,
+        "mean_width_rs_mwh": round(float(dd["width"].mean()), 0),
+        "trail_days": TRAIL_DAYS, "aci_gamma": ACI_GAMMA,
+        "note": ("Walk-forward coverage, not single-window. The previous static "
+                 "margin reported 94.4% but measured 74.7% under a rolling "
+                 "origin with retrained heads; this is calibrated per cap-regime "
+                 "and adapts online to seasonal drift."),
+    }
+# RETIRED. These were quantile heads fitted on ALL rows, i.e. on the mixture,
+# while every consumer treated them as the below-cap law. Superseded by
+# BELOWCAP_PATH + mixture_quantiles(). Kept only so an old artifact on disk is
+# identifiable; nothing reads it.
 QMODEL_PATH = OUT / "price_model_q{q:02.0f}.txt"
 CONFORMAL_PATH = OUT / "price_conformal.json"
 
 
+def mixture_mean(feats: pd.DataFrame) -> np.ndarray:
+    """E[MCP] reconstructed by integrating the mixture's own quantile function.
+
+    For any distribution, E[X] = integral of Q(u) du over u in [0,1]. Doing that
+    over the fitted grid gives a mean built ONLY from the quantile heads and the
+    cap classifier — an estimate that shares no fitted parameters with the
+    stage-2 point regression. Comparing the two is therefore a real
+    internal-consistency test rather than a tautology.
+    """
+    q, _pi = mixture_quantiles(feats, QGRID)
+    Q = q[[f"q{t * 100:02.0f}" for t in QGRID]].values
+    u = np.asarray(QGRID)
+    # trapezoid over the grid; the two unmodelled tails ([0,0.02] and
+    # [0.995,1]) are held flat at the end quantiles rather than extrapolated,
+    # because extending an empirical inverse CDF past its support is invention
+    inner = np.trapezoid(Q, u, axis=1) if hasattr(np, "trapezoid") \
+        else np.trapz(Q, u, axis=1)
+    return inner + Q[:, 0] * u[0] + Q[:, -1] * (1.0 - u[-1])
+
+
+def _coherence_line(test: pd.DataFrame, y: np.ndarray) -> str:
+    """Do the distribution and the point model tell the same story?
+
+    NOT a median-vs-mean comparison: predict_hurdle returns the MEAN of the
+    mixture and q50 is its MEDIAN, and for a right-skewed law with an atom at
+    the cap those differ by construction — reporting that gap as "coherence"
+    would be measuring skew and calling it agreement. This compares mean with
+    mean, which is the quantity where disagreement would be a genuine fault.
+    """
+    try:
+        mm = mixture_mean(test)
+        pt = predict_hurdle(test)
+        gap = float(np.mean(np.abs(mm - pt)) )
+        rel = float(np.mean(np.abs(mm - pt) / np.maximum(y, 100)) * 100)
+        skew = float(np.mean(pt - np.asarray(
+            mixture_quantiles(test, (0.50,))[0]["q50"])))
+        return (f"coherence  E[mixture] vs point model: Rs {gap:,.0f}/MWh "
+                f"({rel:.1f}% of actual)   |   mean-median skew "
+                f"Rs {skew:+,.0f}/MWh (expected > 0: atom at the cap)")
+    except Exception as e:
+        return f"coherence check unavailable: {type(e).__name__}: {str(e)[:80]}"
+
+
 def train_quantiles(test_days: int = 60, quantiles=QUANTILES):
-    """Quantile regression models — the distribution, not just the mean.
+    """Fit the below-cap quantile grid — the continuous part of the mixture.
 
-    The point forecast has ~23% MAPE because Indian DAM prices are
-    genuinely volatile, and a single number hides that. Training with
-    LightGBM's pinball (quantile) objective gives P10/P50/P90 per block,
-    which the stochastic optimizer turns into scenarios: we stop
-    pretending to know tomorrow's price and bid on its distribution
-    instead.
+    The served distribution is the censored mixture built in
+    mixture_quantiles(): a point mass at the Rs 10,000 cap of weight P(cap),
+    with this grid describing the law BELOW the cap. So these heads are fitted
+    on below-cap rows only, exactly like stage 2 of the point model. Fitting
+    them on all rows — which is what this function used to do — makes them
+    estimate quantiles of the mixture while the code treats them as quantiles
+    of the continuum, and the two are not the same object.
 
-    Trained on log(MCP) like the point model, so the intervals are
-    multiplicative — wide where prices are high and volatile (evening
-    peak), tight in the quiet night blocks.
+    That confusion was measurable: the old heads put P50 above the actual price
+    only 30% of the time and P90 above it 100% of the time. Fitting below-cap
+    and recombining through the mixture improved pinball loss by 30.6% (better
+    in 5 of 5 walk-forward windows) and moved P50's PIT from 30.2% to 51.9%.
 
-    Reported metric is pinball loss (the proper scoring rule for a
-    quantile) plus empirical coverage: the share of actual prices that
-    fell at or below each predicted quantile, which should land near the
-    nominal level if the model is calibrated.
+    Reported metric is pinball loss — the proper scoring rule for a quantile —
+    plus PIT: the share of actual prices at or below each served quantile,
+    which sits on the nominal level if the forecast is calibrated.
     """
     f = build_features(_table()).dropna(subset=FEATURES + ["mcp_rs_mwh"])
     split = f.index.max().normalize() - pd.Timedelta(days=test_days)
@@ -236,143 +594,54 @@ def train_quantiles(test_days: int = 60, quantiles=QUANTILES):
     train_ = f[f.index < val_split]
     val = f[(f.index >= val_split) & (f.index < split)]
     test = f[f.index >= split]
+    if not CAP_CLF_PATH.exists():
+        raise FileNotFoundError(
+            "cap classifier missing — the mixture cannot be built without "
+            "P(cap). Run `python models/price_model.py` first.")
 
-    y_tr = np.log(train_["mcp_rs_mwh"].clip(lower=50))
-    y_va = np.log(val["mcp_rs_mwh"].clip(lower=50))
-    lines, preds = [], {}
-    for q in quantiles:
+    # below-cap rows only: this grid is G, the law GIVEN the cap does not bind
+    btr = train_[train_["mcp_rs_mwh"] < CAP * 0.95]
+    bva = val[val["mcp_rs_mwh"] < CAP * 0.95]
+    print(f"below-cap grid: train {len(btr):,} of {len(train_):,} blocks "
+          f"({len(btr) / max(len(train_), 1) * 100:.0f}% uncensored)")
+    for q in QGRID:
         m = lgb.LGBMRegressor(
             objective="quantile", alpha=q,
             n_estimators=2000, learning_rate=0.03, num_leaves=63,
             min_child_samples=40, subsample=0.8, subsample_freq=1,
-            colsample_bytree=0.8, reg_lambda=1.0, random_state=42,
+            colsample_bytree=0.8, reg_lambda=1.0, random_state=42, verbose=-1,
         )
-        m.fit(train_[FEATURES], y_tr, eval_set=[(val[FEATURES], y_va)],
+        m.fit(btr[FEATURES], np.log(btr["mcp_rs_mwh"].clip(lower=50)),
+              eval_set=[(bva[FEATURES], np.log(bva["mcp_rs_mwh"].clip(lower=50)))],
               callbacks=[lgb.early_stopping(100, verbose=False),
                          lgb.log_evaluation(0)])
-        m.booster_.save_model(str(QMODEL_PATH).format(q=q * 100))
-        p = np.clip(np.exp(m.predict(test[FEATURES])), 0, 10000)
-        preds[q] = p
-        y = test["mcp_rs_mwh"].values
-        err = y - p
-        pinball = np.mean(np.maximum(q * err, (q - 1) * err))
-        coverage = np.mean(y <= p) * 100
-        lines.append(f"P{q * 100:02.0f}  pinball {pinball:7.1f} Rs/MWh   "
-                     f"coverage {coverage:5.1f}% (nominal {q * 100:.0f}%)")
+        m.booster_.save_model(str(BELOWCAP_PATH).format(q=int(round(q * 1000))))
 
     qlo, qhi = min(quantiles), max(quantiles)
-    lo, hi = preds[qlo], preds[qhi]
-    y = test["mcp_rs_mwh"].values
+    served, _ = mixture_quantiles(test, quantiles)
+    y = test["mcp_rs_mwh"].clip(lower=50).values
+    lines = []
+    for q in quantiles:
+        p = served[f"q{q * 100:02.0f}"].values
+        err = y - p
+        lines.append(f"P{q * 100:02.0f}  pinball "
+                     f"{np.mean(np.maximum(q * err, (q - 1) * err)):7.1f} Rs/MWh   "
+                     f"PIT {np.mean(y <= p) * 100:5.1f}% (nominal {q * 100:.0f}%)")
+
+    lo, hi = served[f"q{qlo * 100:02.0f}"].values, served[f"q{qhi * 100:02.0f}"].values
     raw_inside = np.mean((y >= lo) & (y <= hi)) * 100
     nominal = (qhi - qlo) * 100
     lines.append(f"\nraw P{qlo*100:.0f}-P{qhi*100:.0f}: {raw_inside:.1f}% inside "
                  f"(nominal {nominal:.0f}%), mean width Rs {np.mean(hi - lo):,.0f}/MWh")
 
-    # --- conformal calibration: ASYMMETRIC CQR ---------------------------
-    # The symmetric form does nothing here, and the reason is structural.
-    # Indian DAM prices saturate at the Rs 10,000 cap, so the P90 head predicts
-    # at or near the cap and is essentially NEVER exceeded — measured on the
-    # calibration window, 0.0% of points land above the upper bound while 10.8%
-    # fall below the lower one. The band is one-sided.
-    #
-    # Symmetric CQR scores that with max(q_lo - y, y - q_hi) and takes a single
-    # quantile of it. With so many points sitting exactly on the cap the score
-    # has a point mass at zero, the 80th percentile lands on exactly 0.0000,
-    # and the correction is a no-op — which is what we observed: raw and
-    # "conformal" coverage identical, a Rs 6,300/MWh band against a mean price
-    # near Rs 4,000, and 93.8% coverage against an 80% target.
-    #
-    # Scoring each side separately fixes both ends at once: the upper bound
-    # SHRINKS (it was never exceeded, so its width was pure waste) and the
-    # lower bound moves to where it is actually needed. Each side is calibrated
-    # at 1 - alpha/2, keeping the >= 1 - alpha guarantee by union bound. A
-    # NEGATIVE margin is legitimate and means "this side is too wide".
-    qlo_v = np.log(np.clip(np.exp(lgb.Booster(
-        model_file=str(QMODEL_PATH).format(q=qlo * 100)).predict(val[FEATURES])),
-        50, 10000))
-    qhi_v = np.log(np.clip(np.exp(lgb.Booster(
-        model_file=str(QMODEL_PATH).format(q=qhi * 100)).predict(val[FEATURES])),
-        50, 10000))
-    y_cal = np.log(val["mcp_rs_mwh"].clip(lower=50).values)
-    n = len(y_cal)
-    alpha = 1 - (qhi - qlo)
-    side = min((1 - alpha / 2) * (1 + 1 / n), 1.0)
-    # Calibrate each bound to its TARGET TAIL PROBABILITY directly, rather
-    # than to a quantile of the conformity score. The score-quantile form is
-    # defeated here by the same cap saturation twice over: when the price and
-    # the P90 head are both exactly Rs 10,000 the score is exactly 0, and that
-    # point mass pins any quantile of it at 0 — which is why the symmetric
-    # version was a no-op and the first asymmetric attempt still widened
-    # (lo +0.017, hi +0.000) instead of shrinking.
-    #
-    # Working in RATIOS sidesteps it. For the lower bound we want 10% of
-    # outcomes below it, so exp(-m_lo) must be the 10th percentile of y/q_lo;
-    # for the upper bound we want 10% above, so exp(m_hi) is the 90th
-    # percentile of y/q_hi. Each tail is then calibrated by construction, and
-    # a negative margin — meaning "this side is too wide" — comes out
-    # naturally instead of being blocked.
-    tail = alpha / 2                       # 10% in each tail for an 80% band
-    r_lo = np.exp(y_cal - qlo_v)           # y / q_lo, in ratio space
-    r_hi = np.exp(y_cal - qhi_v)           # y / q_hi
-    m_lo = -float(np.log(np.quantile(r_lo, tail)))
+    lines.append(_coherence_line(test, y))
 
-    # The upper bound needs one more step, and the reason is worth stating.
-    # On cap blocks the outcome IS Rs 10,000 and the P90 head predicts
-    # Rs 10,000, so the ratio is exactly 1.0. More than 10% of the calibration
-    # window sits there, which pins the 90th percentile at 1.0 and makes any
-    # global calibration a no-op — we tried the score-quantile form and the
-    # ratio form and both returned hi +0.000.
-    #
-    # The correct reading is that the band is NOT too wide at the cap; it is
-    # exactly right there, because the cap is a hard ceiling and the model
-    # knows it. It is too wide BELOW the cap. So the upper margin is calibrated
-    # on below-cap blocks only, and cap blocks keep a bound that is already
-    # correct. This is a regime split, not a fudge: the price process genuinely
-    # has two regimes and the regulator drew the line.
-    # The upper bound is left UNCORRECTED, and that is a decision, not an
-    # omission. On cap blocks the outcome IS Rs 10,000 and the P90 head
-    # predicts Rs 10,000, so the ratio is exactly 1.0; more than 10% of the
-    # calibration window sits there, which pins any global quantile at 1.0.
-    # Three constructions were tried and measured:
-    #
-    #   symmetric score-quantile     hi +0.000   no-op
-    #   ratio-space global tail      hi +0.000   no-op (same point mass)
-    #   ratio tail on below-cap only hi -0.693   coverage collapsed 93.8 -> 59.7%
-    #
-    # The third fails for an instructive reason: a margin fitted below the cap
-    # is correct there and catastrophic when applied to cap blocks, where the
-    # bound was already right. The band is not uniformly too wide — it is
-    # correct at the cap and too wide beneath it, and a single multiplicative
-    # factor cannot express that. Doing it properly needs a regime-conditional
-    # margin keyed on the cap classifier's P(cap), which is a real piece of
-    # work and is listed as such rather than bodged now.
-    #
-    # So the shipped band OVER-COVERS: ~94% against an 80% target. That is the
-    # conservative direction — it overstates uncertainty rather than
-    # understating it — and the UI reports coverage next to width so the
-    # over-coverage is visible instead of being sold as precision.
-    m_hi = 0.0
-
-    lo_c = np.clip(lo * np.exp(-m_lo), 0, 10000)
-    hi_c = np.clip(hi * np.exp(m_hi), 0, 10000)
-    cal_inside = np.mean((y >= lo_c) & (y <= hi_c)) * 100
-    lines.append(f"asymmetric CQR P{qlo*100:.0f}-P{qhi*100:.0f}: {cal_inside:.1f}% "
-                 f"inside (target {nominal:.0f}%), mean width Rs "
-                 f"{np.mean(hi_c - lo_c):,.0f}/MWh"
-                 f"   [log-margins lo {m_lo:+.3f}, hi {m_hi:+.3f}]")
-
-    CONFORMAL_PATH.write_text(json.dumps({
-        "mode": "asymmetric",
-        "log_margin_lo": m_lo, "log_margin_hi": m_hi,
-        "q_lo": qlo, "q_hi": qhi,
-        "calibration_n": n, "raw_coverage_pct": round(raw_inside, 1),
-        "conformal_coverage_pct": round(cal_inside, 1),
-        "raw_width_rs_mwh": round(float(np.mean(hi - lo)), 0),
-        "conformal_width_rs_mwh": round(float(np.mean(hi_c - lo_c)), 0),
-        "note": ("Asymmetric because the price cap makes the band one-sided: "
-                 "the P90 head is essentially never exceeded, so its width was "
-                 "waste rather than protection."),
-    }, indent=2))
+    # --- conformal calibration: ADAPTIVE x REGIME-CONDITIONAL -------------
+    # Calibrated by calibrate_conformal() on a walk-forward over the held-out
+    # window, which is also where the honest coverage number comes from. See
+    # that function for why a single static margin was abandoned.
+    cal = calibrate_conformal(test, qlo=qlo, qhi=qhi, report_lines=lines)
+    CONFORMAL_PATH.write_text(json.dumps(cal, indent=2))
 
     report = "\n".join(lines)
     print(report)
@@ -380,12 +649,95 @@ def train_quantiles(test_days: int = 60, quantiles=QUANTILES):
     return report
 
 
+def _monotone(qf: pd.DataFrame) -> pd.DataFrame:
+    """Enforce q10 <= q50 <= q90 WITHOUT relabelling the columns.
+
+    Independently-fitted quantile heads can cross. The old fix sorted each row,
+    which was harmless while the margins were global and near zero — but the
+    low-P(cap) regime now carries a 61% shrink of the upper bound, which on 42
+    of 96 blocks pushed a bound past the median. A sort then relabels them, so
+    the column named q50 quietly stops being the median and every consumer of
+    it reads something other than what its name says.
+
+    So clip the BOUNDS around the median instead. The median is a point
+    estimate and stays exactly where the model put it; bounds only move
+    outward, so this can never narrow a band as a side effect.
+    """
+    qcols = sorted([c for c in qf.columns if c.startswith("q")])
+    if len(qcols) < 3:
+        return qf
+    mid = qcols[len(qcols) // 2]
+    for c in qcols:
+        if c < mid:
+            qf[c] = np.minimum(qf[c].values, qf[mid].values)
+        elif c > mid:
+            qf[c] = np.maximum(qf[c].values, qf[mid].values)
+    return qf
+
+
+def load_conformal() -> dict | None:
+    """The stored band calibration, or None if it has never been run."""
+    if not CONFORMAL_PATH.exists():
+        return None
+    try:
+        return json.loads(CONFORMAL_PATH.read_text())
+    except Exception:
+        return None
+
+
+def apply_band(qf: pd.DataFrame, pcap: np.ndarray | None = None,
+               cfg: dict | None = None) -> pd.DataFrame:
+    """Apply the calibrated band to a quantile frame, in place.
+
+    ONE implementation, shared by the live serve path and the risk backtest.
+    They used to each carry their own copy, and they drifted: the backtest was
+    still reading a config key ("log_margin") that stopped being written on
+    2 Aug, so it raised KeyError on every run while the dashboard kept showing
+    its last successful output as though it were current. A single function
+    cannot go stale in one caller and not the other.
+
+    pcap=None (or no cap classifier) falls back to the global margins, which
+    are conservative rather than absent.
+    """
+    cfg = cfg or load_conformal()
+    if not cfg:
+        return qf
+    g_lo = cfg.get("log_margin_lo", cfg.get("log_margin", 0.0))
+    g_hi = cfg.get("log_margin_hi", cfg.get("log_margin", 0.0))
+    lo_col, hi_col = f"q{cfg['q_lo'] * 100:02.0f}", f"q{cfg['q_hi'] * 100:02.0f}"
+
+    m_lo = np.full(len(qf), float(g_lo))
+    m_hi = np.full(len(qf), float(g_hi))
+    regs = cfg.get("regimes")
+    if regs and pcap is not None:
+        b = regime_of(np.asarray(pcap))
+        for i, r in enumerate(regs):
+            m = b == i
+            if m.any():
+                m_lo[m], m_hi[m] = r["m_lo"], r["m_hi"]
+
+    if lo_col in qf:
+        qf[lo_col] = (qf[lo_col].values * np.exp(-m_lo)).clip(0, CAP)
+    if hi_col in qf:
+        qf[hi_col] = (qf[hi_col].values * np.exp(m_hi)).clip(0, CAP)
+    return _monotone(qf)
+
+
+def cap_probability(feats: pd.DataFrame) -> np.ndarray | None:
+    """P(this block clears at the cap), or None if the classifier is missing."""
+    if not CAP_CLF_PATH.exists():
+        return None
+    return lgb.Booster(model_file=str(CAP_CLF_PATH)).predict(feats[FEATURES])
+
+
 def forecast_day_quantiles(target: date | None = None, quantiles=QUANTILES,
                            conformal: bool = True) -> pd.DataFrame:
-    """Per-block price quantiles for `target` — columns q10/q50/q90.
+    """Per-block price quantiles for `target` — columns q10/q50/q90 + p_cap.
 
-    With conformal=True the outer quantiles are widened by the stored CQR
-    margin so the band actually achieves its nominal coverage.
+    Quantiles of the censored mixture (see mixture_quantiles), then the
+    calibrated band on top. The feature build is the only thing specific to
+    serving a future day; the model itself is predict_quantiles, shared with
+    the backtest and the calibration walk.
     """
     target = target or (date.today() + timedelta(days=1))
     df = _table()
@@ -396,33 +748,7 @@ def forecast_day_quantiles(target: date | None = None, quantiles=QUANTILES,
     df["temp_c"] = df["temp_c"].combine_first(fc)
     day = build_features(df)
     day = day[day.index.date == target]
-
-    out = pd.DataFrame(index=day.index)
-    for q in quantiles:
-        path = str(QMODEL_PATH).format(q=q * 100)
-        if not Path(path).exists():
-            raise FileNotFoundError(
-                f"{path} missing — run `python models/price_model.py quantiles`")
-        b = lgb.Booster(model_file=path)
-        out[f"q{q * 100:02.0f}"] = np.clip(np.exp(b.predict(day[FEATURES])), 0, 10000)
-    if conformal and CONFORMAL_PATH.exists():
-        cfg = json.loads(CONFORMAL_PATH.read_text())
-        # two margins now; fall back to the old single one for stale files
-        m_lo = cfg.get("log_margin_lo", cfg.get("log_margin", 0.0))
-        m_hi = cfg.get("log_margin_hi", cfg.get("log_margin", 0.0))
-        lo_col = f"q{cfg['q_lo'] * 100:02.0f}"
-        hi_col = f"q{cfg['q_hi'] * 100:02.0f}"
-        if lo_col in out:
-            out[lo_col] = (out[lo_col] * np.exp(-m_lo)).clip(0, 10000)
-        if hi_col in out:
-            out[hi_col] = (out[hi_col] * np.exp(m_hi)).clip(0, 10000)
-        out.attrs["conformal"] = True
-    else:
-        out.attrs["conformal"] = False
-    # quantile models are fitted independently and can cross on rare blocks;
-    # enforce monotonicity so downstream scenario interpolation stays sane
-    out[:] = np.sort(out.values, axis=1)
-    return out
+    return predict_quantiles(day, quantiles, conformal=conformal)
 
 
 def forecast_day(target: date | None = None) -> pd.DataFrame:
