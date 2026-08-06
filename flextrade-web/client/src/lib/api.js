@@ -28,6 +28,7 @@ const STATIC_FILES = {
   "/api/bankability": "bankability",
   "/api/re-state": "re_state",
   "/api/stress": "stress",
+  "/api/dsm-state": "dsm_state",
   "/api/live": "live",
   "/api/bess/history": "bess_history",
   "/api/load/recent": "load_recent",

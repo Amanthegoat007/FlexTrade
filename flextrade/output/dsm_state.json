@@ -1,0 +1,192 @@
+{
+  "settlement": {
+    "state": "Uttar Pradesh",
+    "source": "upsldc.org \u2014 the only state publishing schedule/drawal/deviation",
+    "snapshots": 108,
+    "blocks_sampled": 93,
+    "from": "2026-08-02 17:31:08",
+    "to": "2026-08-06 12:15:27",
+    "mean_schedule_mw": 11131.0,
+    "mean_demand_mw": 24547.0,
+    "mean_abs_deviation_mw": 321.0,
+    "over_drawing_pct": 46.3,
+    "band_mw_typical": 100.0,
+    "outside_band_pct": 82.4,
+    "mean_normal_rate_rs_mwh": 3117.0,
+    "sample_payable_rs": 8338693.0,
+    "sample_credit_rs": 11991257.0,
+    "sample_net_rs": -3652564.0,
+    "est_payable_per_day_rs": 8607683.0,
+    "est_payable_per_year_rs": 3141804251.0,
+    "sample_scale_factor": 3.9,
+    "by_hour": [
+      {
+        "hr": 0,
+        "n": 2,
+        "mean_dev_mw": -164.5,
+        "mean_abs_dev_mw": 164.5,
+        "outside_pct": 100.0,
+        "charge_rs": -322500.0
+      },
+      {
+        "hr": 2,
+        "n": 9,
+        "mean_dev_mw": 207.9,
+        "mean_abs_dev_mw": 273.9,
+        "outside_pct": 100.0,
+        "charge_rs": 1166351.0
+      },
+      {
+        "hr": 3,
+        "n": 1,
+        "mean_dev_mw": -207.0,
+        "mean_abs_dev_mw": 207.0,
+        "outside_pct": 100.0,
+        "charge_rs": -98869.7
+      },
+      {
+        "hr": 5,
+        "n": 1,
+        "mean_dev_mw": 708.0,
+        "mean_abs_dev_mw": 708.0,
+        "outside_pct": 100.0,
+        "charge_rs": 526993.6
+      },
+      {
+        "hr": 9,
+        "n": 2,
+        "mean_dev_mw": 1139.0,
+        "mean_abs_dev_mw": 1139.0,
+        "outside_pct": 100.0,
+        "charge_rs": 1562569.4
+      },
+      {
+        "hr": 10,
+        "n": 9,
+        "mean_dev_mw": 216.2,
+        "mean_abs_dev_mw": 395.1,
+        "outside_pct": 88.9,
+        "charge_rs": 1098515.2
+      },
+      {
+        "hr": 11,
+        "n": 17,
+        "mean_dev_mw": -3.6,
+        "mean_abs_dev_mw": 342.9,
+        "outside_pct": 88.2,
+        "charge_rs": -409804.9
+      },
+      {
+        "hr": 12,
+        "n": 13,
+        "mean_dev_mw": -67.8,
+        "mean_abs_dev_mw": 256.6,
+        "outside_pct": 46.2,
+        "charge_rs": -315779.9
+      },
+      {
+        "hr": 13,
+        "n": 9,
+        "mean_dev_mw": -277.2,
+        "mean_abs_dev_mw": 329.4,
+        "outside_pct": 100.0,
+        "charge_rs": -833319.6
+      },
+      {
+        "hr": 14,
+        "n": 10,
+        "mean_dev_mw": -256.1,
+        "mean_abs_dev_mw": 271.7,
+        "outside_pct": 70.0,
+        "charge_rs": -694432.3
+      },
+      {
+        "hr": 15,
+        "n": 12,
+        "mean_dev_mw": 6.2,
+        "mean_abs_dev_mw": 247.2,
+        "outside_pct": 83.3,
+        "charge_rs": -107905.7
+      },
+      {
+        "hr": 16,
+        "n": 6,
+        "mean_dev_mw": -62.5,
+        "mean_abs_dev_mw": 215.8,
+        "outside_pct": 83.3,
+        "charge_rs": -339255.4
+      },
+      {
+        "hr": 17,
+        "n": 5,
+        "mean_dev_mw": -43.4,
+        "mean_abs_dev_mw": 243.8,
+        "outside_pct": 100.0,
+        "charge_rs": -23199.3
+      },
+      {
+        "hr": 18,
+        "n": 3,
+        "mean_dev_mw": 66.0,
+        "mean_abs_dev_mw": 108.0,
+        "outside_pct": 33.3,
+        "charge_rs": 195000.0
+      },
+      {
+        "hr": 19,
+        "n": 7,
+        "mean_dev_mw": -258.6,
+        "mean_abs_dev_mw": 531.1,
+        "outside_pct": 85.7,
+        "charge_rs": -3614426.6
+      },
+      {
+        "hr": 21,
+        "n": 1,
+        "mean_dev_mw": -549.0,
+        "mean_abs_dev_mw": 549.0,
+        "outside_pct": 100.0,
+        "charge_rs": -1122500.0
+      },
+      {
+        "hr": 23,
+        "n": 1,
+        "mean_dev_mw": -228.0,
+        "mean_abs_dev_mw": 228.0,
+        "outside_pct": 100.0,
+        "charge_rs": -320000.0
+      }
+    ],
+    "caveat": "An UPPER BOUND, not a settlement, and biased high for a specific reason. 93 distinct 15-minute blocks were priced out of the 362 in the window, and the published deviation is an INSTANTANEOUS reading while DSM settles on the BLOCK AVERAGE. Instantaneous excursions partly cancel within a block, so the average is smaller than the reading \u2014 systematically, not randomly. The sample also inherits the collector's own hours, including a gap between 05:00 and 08:00 that has never been covered. Treat the per-snapshot charge as real, the daily and annual figures as the top of a range. A true settlement needs SLDC's block-wise energy account, which is not public.",
+    "bias": "upper bound \u2014 instantaneous readings exceed block averages",
+    "ancillary_proxied": true
+  },
+  "forecast_value": {
+    "state": "Uttar Pradesh",
+    "annual_payable_rs": 3141804251.0,
+    "basis": "upper bound (see settlement caveat)",
+    "scenarios": [
+      {
+        "deviation_reduced_pct": 10,
+        "annual_saving_rs": 314180425.0
+      },
+      {
+        "deviation_reduced_pct": 20,
+        "annual_saving_rs": 628360850.0
+      },
+      {
+        "deviation_reduced_pct": 30,
+        "annual_saving_rs": 942541275.0
+      },
+      {
+        "deviation_reduced_pct": 40,
+        "annual_saving_rs": 1256721700.0
+      },
+      {
+        "deviation_reduced_pct": 50,
+        "annual_saving_rs": 1570902126.0
+      }
+    ],
+    "note": "Deviation charges scale roughly with the excess beyond the band, so a proportional cut in deviation is a proportional cut in charge. The percentage is the customer's assumption, not our claim."
+  }
+}

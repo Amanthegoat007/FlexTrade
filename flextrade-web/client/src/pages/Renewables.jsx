@@ -7,6 +7,7 @@ import { fmtINR, fmtTs, useApi } from "../lib/api";
 export default function Renewables() {
   const { data: dsm, loading, error } = useApi("/api/dsm");
   const { data: re } = useApi("/api/re-state");
+  const { data: dstate } = useApi("/api/dsm-state");
   const [profile, setProfile] = useState("CERC_2024");
 
   if (loading && !dsm) return <Loading error={error} />;
@@ -28,6 +29,8 @@ export default function Renewables() {
         lead="A solar + wind digital twin scored on real day-ahead weather error, settled block-by-block
               through a versioned CERC engine (2022 & 2024), with an alerts engine that flags a
               profitable schedule revision before the gate closes." />
+      <StateDSMPanel d={dstate} />
+
       <RealREPanel re={re} />
 
       <h2 className="section-title">Deviation Settlement Mechanism — settlement day {dsm?.settlement_day}</h2>
@@ -232,6 +235,80 @@ function RealREPanel({ re }) {
         the state with the worst geographic error gained the most, which is the
         confirmation the diagnosis was right.
       </div>
+    </>
+  );
+}
+
+/* Real per-state DSM. Everything else on this page prices a twin; this prices
+   a genuine 11 GW schedule against genuine drawal, for the only state in India
+   that publishes both. */
+function StateDSMPanel({ d }) {
+  if (!d) return null;
+  if (d.error) return <Card title="Per-state DSM"><div className="note">{d.error}</div></Card>;
+  const s = d.settlement || {};
+  const fv = d.forecast_value || {};
+  if (s.error) return <Card title="Per-state DSM"><div className="note">{s.error}</div></Card>;
+  const cr = (v) => (v == null ? "-" : `\u20b9${(v / 1e7).toFixed(1)} Cr`);
+
+  return (
+    <>
+      <h2 className="section-title">
+        Deviation, priced on a real state
+        <InfoTip text="Uttar Pradesh's load despatch centre is the only one in India publishing schedule, drawal and deviation together. Everything else on this page prices a simulated plant; this prices a real book." />
+      </h2>
+
+      <div className="note info">
+        <b>This is the market that is compelled to buy.</b> A generator chooses whether
+        to hedge. A DISCOM does not choose whether to deviate — it is charged for it
+        under the CERC framework whatever it does. UP runs a{" "}
+        <b>{s.mean_schedule_mw?.toLocaleString("en-IN")} MW</b> inter-state schedule with a
+        mean absolute deviation of <b>{s.mean_abs_deviation_mw?.toLocaleString("en-IN")} MW</b>{" "}
+        against a tolerance band of just {s.band_mw_typical} MW — outside the band on{" "}
+        <b>{s.outside_band_pct}%</b> of snapshots.
+      </div>
+
+      <div className="grid4">
+        <Stat label="Mean |deviation|" value={s.mean_abs_deviation_mw?.toLocaleString("en-IN")} unit="MW"
+          hint={`band is ${s.band_mw_typical} MW — min(10% of schedule, 100 MW)`} />
+        <Stat label="Outside the band" value={`${s.outside_band_pct}%`}
+          hint={`of ${s.snapshots} snapshots · over-drawing ${s.over_drawing_pct}%`} />
+        <Stat label="Normal Rate" value={`\u20b9${s.mean_normal_rate_rs_mwh?.toLocaleString("en-IN")}`}
+          unit="/MWh" hint="CERC Reg 14: mean of DAM, RTM and ancillary"
+          infoText="Built from our live DAM and RTM feeds, so the charge moves with the market. The ancillary leg has no public feed and is proxied by RTM, which is flagged in every result." />
+        <Stat label="Exposure, upper bound" value={cr(s.est_payable_per_year_rs)} unit="/yr"
+          hint={`scaled x${s.sample_scale_factor} from ${s.blocks_sampled} priced blocks`}
+          infoText="An upper bound, not a settlement. See the note below for why it is biased high." />
+      </div>
+
+      <div className="note crit">
+        <b>Read this as the top of a range, not a bill.</b> {s.caveat}
+      </div>
+
+      {fv.scenarios && (
+        <Card title="What cutting deviation is worth" info="DSM"
+          sub="Deviation charges scale with the excess beyond the band, so a proportional cut in deviation is a proportional cut in charge. The percentage is the customer's assumption about their own improvement — not our claim about it.">
+          <div className="scroll-x">
+            <table className="data">
+              <thead><tr><th>Deviation reduced by</th><th className="num">Annual saving</th></tr></thead>
+              <tbody>
+                {fv.scenarios.map((x) => (
+                  <tr key={x.deviation_reduced_pct}>
+                    <td>{x.deviation_reduced_pct}%</td>
+                    <td className="num"><b>{cr(x.annual_saving_rs)}</b></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="note" style={{ marginTop: 10 }}>
+            Both columns inherit the upper-bound bias above. The point is the
+            <i> shape</i> of the opportunity, not the rupee figure: for a state of
+            this size, single-digit percentage improvements in scheduling are worth
+            tens of crores a year, which is why deviation is the line item a DISCOM
+            will fund a forecast to reduce.
+          </div>
+        </Card>
+      )}
     </>
   );
 }

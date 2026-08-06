@@ -1,0 +1,72 @@
+name: collect
+
+# WHY THIS EXISTS
+#
+# Every upstream source in this project is snapshot-only — MERIT, the state
+# SLDCs and the Vidyut PRAVAH area price all publish "now" and no history. So
+# depth exists only if we collect it, and a missed block is gone permanently.
+#
+# The laptop collector has a structural hole. Measured over 14 days: hours
+# 05:00, 06:00 and 07:00 have NEVER been collected, and 67% of all snapshots
+# land in the 10:00-16:00 window. Enabling WakeToRun on the scheduled tasks did
+# not fix it, because the machine is shut down rather than asleep and nothing
+# in software wakes a powered-off laptop.
+#
+# That hole is exactly the morning ramp, so an intraday multi-state model
+# trained on the laptop's sample would never once have seen it. This runs the
+# same collector on infrastructure that does not sleep, and commits the result,
+# so coverage stops depending on whether anyone was at their desk.
+#
+# GitHub's scheduler is best-effort and can run late under load, so treat the
+# cadence as "roughly every 15 minutes" rather than exact. Late is fine; the
+# timestamp recorded is the real fetch time, not the scheduled one.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:        # so it can be triggered by hand to test
+
+concurrency:
+  # never let a slow run overlap the next tick and double-write
+  group: collect
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: install
+        run: pip install --quiet requests pandas
+
+      - name: collect
+        # Never fail the workflow on a dead upstream — a source being down is
+        # normal and must not turn into a red build that nobody reads.
+        continue-on-error: true
+        run: python flextrade/collect_ci.py
+
+      - name: commit whatever was captured
+        run: |
+          git config user.name  "flextrade-collector"
+          git config user.email "collector@flextrade.local"
+          git add -A data/collected || true
+          if git diff --cached --quiet; then
+            echo "nothing new captured this tick"
+          else
+            git commit -m "collect $(date -u '+%Y-%m-%d %H:%M UTC')"
+            # the schedule can overlap a human push; rebase rather than fail
+            for i in 1 2 3; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && break
+              sleep 5
+            done
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi

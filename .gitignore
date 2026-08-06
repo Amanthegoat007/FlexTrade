@@ -15,6 +15,10 @@ flextrade/logs/
 flextrade/output/web/
 *.log
 
+# CI-collected snapshots ARE the data asset — never ignore them
+!data/collected/
+!data/collected/*.csv
+
 # --- scratch ---
 .DS_Store
 Thumbs.db

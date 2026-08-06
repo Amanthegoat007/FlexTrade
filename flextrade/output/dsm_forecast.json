@@ -1,136 +1,136 @@
 {
   "exposure": {
-    "day": "2026-08-04",
+    "day": "2026-08-07",
     "profile": "CERC_2024",
     "seller": "buyer",
     "technology": "general",
     "blocks": 96,
     "n_scenarios": 60,
     "entity_peak_mw": 200.0,
-    "schedule_mwh": 4096.365352718563,
-    "expected_dsm_rs": -59791.78073031776,
-    "expected_payable_rs": 17131.61933316678,
+    "schedule_mwh": 4226.986809126796,
+    "expected_dsm_rs": -48209.5088656409,
+    "expected_payable_rs": 13125.926806422565,
     "p90_payable_rs": 0.0,
-    "worst_payable_rs": 1015786.0491742908,
+    "worst_payable_rs": 780257.8647931598,
     "p90_dsm_rs": 0.0,
-    "p10_dsm_rs": -235324.62660423547,
-    "worst_scenario_rs": 1015786.0491742908,
-    "best_scenario_rs": -1408165.4999170033,
+    "p10_dsm_rs": -194390.72492798176,
+    "worst_scenario_rs": 780257.8647931598,
+    "best_scenario_rs": -1108488.4088361028,
     "expected_blocks_outside_band": 11.983333333333333,
     "expected_pct_outside_band": 12.482638888888888,
-    "normal_rate_mean_rs_mwh": 3965.0215766373335,
+    "normal_rate_mean_rs_mwh": 3056.980385622171,
     "rtm_basis": "rtm_model day-ahead",
     "scenario_basis": "60 whole-day forecast-error curves sampled from the load model's 6-month held-out window (day shape preserved)",
     "worst_scenarios": [
       {
         "error_day": "2026-03-04",
-        "net_dsm_rs": 1015786.0491742908,
-        "payable_rs": 1015786.0491742908,
+        "net_dsm_rs": 780257.8647931598,
+        "payable_rs": 780257.8647931598,
         "blocks_outside_band": 71,
-        "mae_mw": 29.848917447285515
+        "mae_mw": 30.835940496010107
       },
       {
         "error_day": "2026-02-08",
-        "net_dsm_rs": -6368.912646787281,
-        "payable_rs": 12111.110815715858,
+        "net_dsm_rs": -6728.7099191786665,
+        "payable_rs": 7297.743592194145,
         "blocks_outside_band": 9,
-        "mae_mw": 5.374512117053925
+        "mae_mw": 5.495622912343151
       },
       {
         "error_day": "2026-02-20",
         "net_dsm_rs": 0.0,
         "payable_rs": 0.0,
         "blocks_outside_band": 0,
-        "mae_mw": 3.451292061617797
+        "mae_mw": 3.5605762001600696
       },
       {
         "error_day": "2025-12-19",
-        "net_dsm_rs": -16755.970729129975,
+        "net_dsm_rs": -13328.785387874304,
         "payable_rs": 0.0,
         "blocks_outside_band": 13,
-        "mae_mw": 8.35912771241137
+        "mae_mw": 8.658222116776022
       },
       {
         "error_day": "2026-02-07",
-        "net_dsm_rs": -74556.20083915567,
+        "net_dsm_rs": -61679.46404040335,
         "payable_rs": 0.0,
         "blocks_outside_band": 20,
-        "mae_mw": 7.376724335112801
+        "mae_mw": 7.554640463951706
       }
     ]
   },
   "bias_sensitivity": {
-    "day": "2026-08-04",
+    "day": "2026-08-07",
     "profile": "CERC_2024",
     "curve": [
       {
         "bias_pct": -4,
-        "expected_payable_rs": 10758.686882560138,
+        "expected_payable_rs": 8214.228946288325,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -211546.63831787053,
+        "expected_dsm_rs": -169676.77300515978,
         "pct_outside_band": 33.57638888888889
       },
       {
         "bias_pct": -3,
-        "expected_payable_rs": 12130.199211564444,
+        "expected_payable_rs": 9241.609604854633,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -158945.65910167215,
+        "expected_dsm_rs": -127711.6482797156,
         "pct_outside_band": 26.38888888888889
       },
       {
         "bias_pct": -2,
-        "expected_payable_rs": 13648.815725306802,
+        "expected_payable_rs": 10410.448231569339,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -117489.820807212,
+        "expected_dsm_rs": -94609.69278555739,
         "pct_outside_band": 20.416666666666668
       },
       {
         "bias_pct": -1,
-        "expected_payable_rs": 15347.293330660057,
+        "expected_payable_rs": 11731.19984490799,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -85319.23772665153,
+        "expected_dsm_rs": -68827.00951552481,
         "pct_outside_band": 15.625
       },
       {
         "bias_pct": 0,
-        "expected_payable_rs": 17131.61933316678,
+        "expected_payable_rs": 13125.926806422565,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -59791.78073031776,
+        "expected_dsm_rs": -48209.5088656409,
         "pct_outside_band": 12.482638888888888
       },
       {
         "bias_pct": 1,
-        "expected_payable_rs": 19052.580260238712,
+        "expected_payable_rs": 14633.129778328444,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -39586.66380683785,
+        "expected_dsm_rs": -31871.702896796724,
         "pct_outside_band": 10.052083333333334
       },
       {
         "bias_pct": 2,
-        "expected_payable_rs": 21165.57730816633,
+        "expected_payable_rs": 16289.044547861495,
         "p90_payable_rs": 0.0,
-        "expected_dsm_rs": -24047.691325233147,
+        "expected_dsm_rs": -19357.28278016453,
         "pct_outside_band": 7.552083333333333
       },
       {
         "bias_pct": 3,
-        "expected_payable_rs": 23472.337560989068,
-        "p90_payable_rs": 146.3774729186552,
-        "expected_dsm_rs": -11643.336198690238,
+        "expected_payable_rs": 18090.85143299151,
+        "p90_payable_rs": 134.55630142843503,
+        "expected_dsm_rs": -9519.447820785288,
         "pct_outside_band": 6.284722222222222
       },
       {
         "bias_pct": 4,
-        "expected_payable_rs": 26321.89344685471,
-        "p90_payable_rs": 2760.17388538514,
-        "expected_dsm_rs": -1121.6721015282906,
+        "expected_payable_rs": 20347.239885106424,
+        "p90_payable_rs": 2669.2667390727834,
+        "expected_dsm_rs": -1175.763506568264,
         "pct_outside_band": 5.46875
       }
     ],
     "unconstrained_argmin_pct": -4,
     "argmin_at_boundary": true,
     "objective": "expected payable DSM charge (credits not netted)",
-    "p50_schedule_payable_rs": 17131.61933316678,
+    "p50_schedule_payable_rs": 13125.926806422565,
     "p50_pct_outside_band": 12.482638888888888,
     "recommendation": null,
     "recommendation_withheld_because": "the minimum sits at the edge of the sweep: the implemented general-seller Normal Rate credits favourable deviation without the caps the real regulation applies, so any optimum would be an artifact of a missing rule rather than a real saving"

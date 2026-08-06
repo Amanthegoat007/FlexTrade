@@ -82,6 +82,18 @@ def write_health(stage: str, ok: bool, detail: str = "",
 
 def refresh_live() -> dict:
     status = {}
+    # Pull in anything the CI collector captured while this machine was off.
+    # That is the whole point of it: the laptop has never once collected the
+    # 05:00-07:00 hours, and those blocks are unrecoverable from upstream.
+    try:
+        from ingest import merge_collected
+        merged = merge_collected.merge_all(verbose=False)
+        got = sum(v for v in merged.values() if isinstance(v, int))
+        if got:
+            print(f"  merged {got} CI-collected rows: {merged}")
+    except Exception as e:
+        print(f"  CI merge skipped: {type(e).__name__}: {str(e)[:90]}")
+
     _, status["weather"] = weather.get_forecast(days=2)
     _, status["re_wx"] = weather.get_re_forecast(days=2)
     _, status["iex_dam"] = iex.get_today()

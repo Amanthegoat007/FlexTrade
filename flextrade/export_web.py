@@ -695,6 +695,16 @@ def export_bess():
     _dump("bess.json", out)
 
 
+def export_dsm_state():
+    """Real per-state DSM exposure, priced on UP's measured drawal."""
+    try:
+        from models import dsm_state
+        _dump("dsm_state.json", {"settlement": dsm_state.settle(),
+                                 "forecast_value": dsm_state.forecast_value()})
+    except Exception as e:
+        _dump("dsm_state.json", {"error": f"{type(e).__name__}: {e}"})
+
+
 def export_stress():
     """State Grid Stress Index — exposure and why, per state."""
     try:
@@ -932,6 +942,7 @@ if __name__ == "__main__":
         export_bankability()
         export_re_state()
         export_stress()
+        export_dsm_state()
         export_sqlite_series()
         export_meta()
     else:
@@ -950,4 +961,5 @@ if __name__ == "__main__":
         export_bankability()
         export_re_state()
         export_stress()
+        export_dsm_state()
         export_meta()  # re-dump so freshness reflects the fetches above
