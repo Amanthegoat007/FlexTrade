@@ -129,6 +129,127 @@ def bankability(curves: dict, n_boot: int = 10000, seed: int = 42) -> dict:
     return res
 
 
+def duration_irr_sweep(power_share_grid=(0.0, 0.15, 0.25, 0.33, 0.40, 0.50, 0.60),
+                       durations=(1.0, 2.0, 4.0), anchor_rs_per_mwh: float = 1.5e7,
+                       anchor_duration_h: float = 2.0) -> dict:
+    """Which storage duration earns the best equity IRR — and how sure can we be?
+
+    Ember report that Indian merchant BESS at 1-2h earns 15-22% IRR against
+    13-18% for 4h, because faster cycling harvests more spread. That is a
+    claim about OUR customers' capital allocation, so it is worth replicating
+    on our own dispatch and our own price history rather than repeating.
+
+    The honest answer turns out to depend almost entirely on ONE number we
+    cannot source precisely: how much of BESS capex is power-related (PCS,
+    transformer, grid connection, EPC — indifferent to duration) versus
+    energy-related (cells, racks — scales with MWh). A flat Rs/MWh capex, which
+    this model used to assume, silently sets the power share to ZERO and hands
+    the win to short duration by construction.
+
+    So rather than assert a split, this sweeps it. For each candidate power
+    share the total is re-anchored so a `anchor_duration_h`-hour system still
+    costs `anchor_rs_per_mwh` — the configuration Indian tenders actually
+    discover — which keeps every scenario comparable to a real quote.
+
+    Returns the IRR by duration at each split, and the power share where the
+    ranking flips. That threshold is the finding: it tells a developer how
+    precisely they need to know their own cost breakdown before the duration
+    decision is even answerable.
+    """
+    from models import bankability as bk
+
+    curves = compute()
+    bank = bankability(curves)
+    out = {"anchor_rs_per_mwh": anchor_rs_per_mwh,
+           "anchor_duration_h": anchor_duration_h,
+           "capture_ratio": curves["capture_ratio"],
+           "window": {"from": curves["first_day"], "to": curves["last_day"],
+                      "n_days": curves["n_days"]},
+           "splits": []}
+
+    for share in power_share_grid:
+        # Re-anchor: at the anchor duration, blended Rs/MWh must equal the
+        # tender-discovered figure.  (P + E*D)/D = anchor, with P = share of
+        # that total attributable to the power term.
+        total_per_mw_at_anchor = anchor_rs_per_mwh * anchor_duration_h
+        p_per_mw = share * total_per_mw_at_anchor
+        e_per_mwh = (total_per_mw_at_anchor - p_per_mw) / anchor_duration_h
+
+        row = {"power_share": share,
+               "capex_power_rs_per_mw": round(p_per_mw, 0),
+               "capex_energy_rs_per_mwh": round(e_per_mwh, 0),
+               "durations": {}}
+        for dur in durations:
+            key = f"{dur:g}h"
+            if key not in bank:
+                continue
+            rev_per_mw = bank[key]["annual_p50_rs_mw"]
+            a = bk.Assumptions(power_mw=1.0, duration_h=dur,
+                               capex_power_rs_per_mw=p_per_mw,
+                               capex_energy_rs_per_mwh=e_per_mwh)
+            m = bk.build(a, rev_per_mw)
+            row["durations"][key] = {
+                "annual_rev_p50_rs_mw": rev_per_mw,
+                "blended_capex_rs_per_mwh": round(a.capex_rs_per_mwh, 0),
+                "equity_irr_pct": m.get("equity_irr_pct"),
+                "min_dscr": m.get("min_dscr"),
+            }
+        ranked = sorted((d for d in row["durations"]
+                         if row["durations"][d]["equity_irr_pct"] is not None),
+                        key=lambda d: -row["durations"][d]["equity_irr_pct"])
+        row["best_duration"] = ranked[0] if ranked else None
+        out["splits"].append(row)
+
+    winners = [(r["power_share"], r["best_duration"]) for r in out["splits"]
+               if r["best_duration"]]
+    # Report EVERY flip, not the first. The ranking changes more than once
+    # across a plausible range, and quoting only the first boundary would imply
+    # a single stable answer on either side of it — which is exactly the
+    # overconfidence this sweep exists to prevent.
+    flips = [s for (s, w), (_, wp) in zip(winners[1:], winners[:-1]) if w != wp]
+    out["best_duration_by_share"] = winners
+    out["flip_power_shares"] = flips
+    distinct = sorted({w for _s, w in winners})
+    out["verdict"] = (
+        f"duration ranking is NOT a property of the market — it flips at power "
+        f"share {', '.join(f'{f:.0%}' for f in flips)}, and {len(distinct)} of "
+        f"{len(durations)} durations win somewhere in the plausible range "
+        f"({', '.join(distinct)}). The capex split decides the answer, so it "
+        f"has to be measured before the duration question is even answerable."
+        if flips else
+        f"ranking is stable at {distinct[0]} across every power share tested")
+
+    # What a developer actually needs: at OUR measured revenue, how cheap does
+    # capex have to be before the asset clears its cost of equity at all?
+    coe = bk.Assumptions().cost_of_equity_pct
+    out["cost_of_equity_pct"] = coe
+    out["breakeven_capex"] = {}
+    for dur in durations:
+        key = f"{dur:g}h"
+        if key not in bank:
+            continue
+        rev = bank[key]["annual_p50_rs_mw"]
+        lo, hi = 1e5, 4.0e7        # Rs/MWh blended, bisected
+        got = None
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            a = bk.Assumptions(power_mw=1.0, duration_h=dur,
+                               capex_power_rs_per_mw=0.0,
+                               capex_energy_rs_per_mwh=mid)
+            irr_v = bk.build(a, rev).get("equity_irr_pct")
+            if irr_v is None:
+                break
+            if irr_v >= coe:
+                lo, got = mid, mid
+            else:
+                hi = mid
+        out["breakeven_capex"][key] = {
+            "annual_rev_p50_rs_mw": rev,
+            "max_capex_rs_per_mwh_for_coe": round(got, 0) if got else None,
+        }
+    return out
+
+
 def export() -> dict:
     """Everything the web calculator needs, ready for modules.json."""
     curves = compute()
@@ -147,11 +268,21 @@ def export() -> dict:
         "capex_rs_per_mwh_default": CAPEX_RS_PER_MWH_DEFAULT,
         "bankability": bank,
         "monthly": monthly,
+        "duration_sweep": duration_irr_sweep(),
         "caveats": [
-            "trailing-year DAM arbitrage only — RTM/DSM/ancillary revenue is additive upside, not counted",
-            "achievable = perfect-foresight LP x measured 93.8% capture ratio (55-day walk-forward)",
+            "trailing-year DAM arbitrage only — RTM/DSM/ancillary revenue is additive upside, not counted. "
+            "Ancillary alone is reported elsewhere as 15-20% of a merchant BESS revenue stack, so this "
+            "understates a stacked asset by roughly that much",
+            f"achievable = perfect-foresight LP x measured {CAPTURE_RATIO:.1%} capture ratio, "
+            f"read live from the backtest rather than frozen",
             "bootstrap treats days as exchangeable; window includes this summer's high-price regime",
-            "capex defaults indicative of FY25-26 tender discovery (Rs 1.3-1.8 Cr/MWh) — enter your own quote",
+            "capex is TWO-PART (Rs/MW power + Rs/MWh energy), anchored so a 2h system costs "
+            "Rs 1.5 Cr/MWh — the FY25-26 tender range is 1.3-1.8 Cr/MWh. A flat Rs/MWh, which this "
+            "model used to assume, forces the power share to zero and hands every duration comparison "
+            "to the shortest system by construction",
+            "the split between power- and energy-related capex is an ASSUMPTION we have not sourced; "
+            "duration_sweep shows the best duration changes with it, so treat the ranking as "
+            "conditional until you enter your own cost breakdown",
         ],
     }
 

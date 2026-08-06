@@ -111,8 +111,28 @@ class Assumptions:
     duration_h: float = 2.0
     life_years: int = 15
 
-    # --- capex (Indian grid BESS, 2025-26 tender range Rs 1.3-1.8 Cr/MWh) ---
-    capex_rs_per_mwh: float = 1.5e7
+    # --- capex, TWO-PART (Indian grid BESS, FY25-26 tender range 1.3-1.8 Cr/MWh)
+    #
+    # Split into a power-related and an energy-related component, because a
+    # single Rs/MWh figure makes every duration comparison meaningless. Under a
+    # flat Rs/MWh a 1h system costs a QUARTER of a 4h system while earning far
+    # more than a quarter of the revenue, so short duration wins by construction
+    # rather than on merit — an error a project-finance reviewer finds in one
+    # pass, and one this model previously made.
+    #
+    #   power-related  PCS, transformer, switchgear, grid connection, EPC, land
+    #                  -> scales with MW, indifferent to how many hours you store
+    #   energy-related cells, modules, racks, containers, BMS
+    #                  -> scales with MWh
+    #
+    # Defaults are CALIBRATED so a 2-hour system — the configuration Indian
+    # tenders actually discover — reproduces Rs 1.5 Cr/MWh:
+    #     (1.0e7 + 2 x 1.0e7) / 2 = 1.5e7  per MWh
+    # The split itself is an assumption, not a measurement. duration_irr_sweep()
+    # in sizing.py reports how much the answer moves with it, which is the
+    # honest way to use a number we cannot source precisely.
+    capex_power_rs_per_mw: float = 1.0e7
+    capex_energy_rs_per_mwh: float = 1.0e7
     gst_pct: float = 18.0
     # share of capex that is the battery itself, i.e. what augmentation replaces
     cell_share_of_capex: float = 0.60
@@ -149,6 +169,19 @@ class Assumptions:
     def energy_mwh(self) -> float:
         return self.power_mw * self.duration_h
 
+    @property
+    def capex_ex_gst_rs(self) -> float:
+        """Total capex before GST — power component plus energy component."""
+        return (self.capex_power_rs_per_mw * self.power_mw
+                + self.capex_energy_rs_per_mwh * self.energy_mwh)
+
+    @property
+    def capex_rs_per_mwh(self) -> float:
+        """Blended Rs/MWh, for reporting and for comparison against tender
+        discovery. DERIVED — it is an output of the two-part model, not an
+        input, so it moves with duration exactly as a real quote does."""
+        return self.capex_ex_gst_rs / max(self.energy_mwh, 1e-9)
+
 
 MEASURED = {"cycles_per_year", "mean_cycle_depth"}   # from our own operations
 
@@ -169,7 +202,7 @@ def annual_fade_pct(a: Assumptions, params: dg.DegParams = dg.DegParams()) -> fl
 def build(a: Assumptions, base_annual_revenue_rs: float,
           params: dg.DegParams = dg.DegParams()) -> dict:
     """Full lifetime cash-flow model. Returns per-year rows plus headline metrics."""
-    capex_ex_gst = a.capex_rs_per_mwh * a.energy_mwh
+    capex_ex_gst = a.capex_ex_gst_rs        # two-part: power MW + energy MWh
     capex = capex_ex_gst * (1 + a.gst_pct / 100)
     debt = capex * a.debt_share_pct / 100
     equity = capex - debt
@@ -190,7 +223,12 @@ def build(a: Assumptions, base_annual_revenue_rs: float,
         augment = 0.0
         if capacity < a.augment_at_capacity_pct / 100:
             restore = 1.0 - capacity
-            unit = (a.capex_rs_per_mwh * a.cell_share_of_capex
+            # Augmentation buys CELLS, and cells sit entirely inside the energy
+            # component — you do not re-buy the PCS or the grid connection to
+            # restore capacity. Pricing this off the blended Rs/MWh overstated
+            # augmentation for short-duration systems (whose blended figure is
+            # inflated by power-related cost) and understated it for long ones.
+            unit = (a.capex_energy_rs_per_mwh * a.cell_share_of_capex
                     * (1 - a.cell_price_decline_pct_yr / 100) ** (yr - 1))
             augment = restore * a.energy_mwh * unit * (1 + a.gst_pct / 100)
             wdv += augment / (1 + a.gst_pct / 100)
