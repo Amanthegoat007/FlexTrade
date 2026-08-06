@@ -1,0 +1,72 @@
+{
+  "window": {
+    "from": "2025-08-06",
+    "to": "2026-08-06",
+    "n_days": 363
+  },
+  "asset": {
+    "power_mw": 1.0,
+    "energy_mwh": 2.0,
+    "duration_h": 2.0
+  },
+  "sustain_h": 1.0,
+  "arbitrage_only_annual_rs_per_mw": 3729565.0,
+  "reserve_levels": [
+    {
+      "reserve_frac": 0.1,
+      "reserve_mw": 0.1,
+      "arbitrage_annual_rs_per_mw": 3622575.0,
+      "forgone_arbitrage_rs_per_mw_yr": 106991.0,
+      "forgone_pct": 2.9,
+      "breakeven_tras_rs_per_mw_h": 122.1,
+      "throughput_mwh_per_mw_yr": 1826.0,
+      "days": 363
+    },
+    {
+      "reserve_frac": 0.25,
+      "reserve_mw": 0.25,
+      "arbitrage_annual_rs_per_mw": 3275843.0,
+      "forgone_arbitrage_rs_per_mw_yr": 453722.0,
+      "forgone_pct": 12.2,
+      "breakeven_tras_rs_per_mw_h": 207.2,
+      "throughput_mwh_per_mw_yr": 1627.9,
+      "days": 363
+    },
+    {
+      "reserve_frac": 0.5,
+      "reserve_mw": 0.5,
+      "arbitrage_annual_rs_per_mw": 2638331.0,
+      "forgone_arbitrage_rs_per_mw_yr": 1091234.0,
+      "forgone_pct": 29.3,
+      "breakeven_tras_rs_per_mw_h": 249.1,
+      "throughput_mwh_per_mw_yr": 1286.2,
+      "days": 363
+    },
+    {
+      "reserve_frac": 0.75,
+      "reserve_mw": 0.75,
+      "arbitrage_annual_rs_per_mw": 1874980.0,
+      "forgone_arbitrage_rs_per_mw_yr": 1854586.0,
+      "forgone_pct": 49.7,
+      "breakeven_tras_rs_per_mw_h": 282.3,
+      "throughput_mwh_per_mw_yr": 925.7,
+      "days": 363
+    }
+  ],
+  "measured": [
+    "forgone arbitrage",
+    "throughput",
+    "feasibility"
+  ],
+  "assumed": [],
+  "not_available": {
+    "tras_cleared_price": "IEX publishes seven market-data segments and none is ancillary; Grid-India's ancillary portal is reCAPTCHA-gated and requires a registered participant login. Volume is public (603 MU in Q2 FY26 vs 16.9 MU a year earlier), price is not."
+  },
+  "how_to_read": "These are REQUIRED prices, not revenue. If TRAS clears above the breakeven for a given reserve level, holding that reserve beats pure arbitrage; below it, it does not. Nothing here assumes a TRAS price, so none of it inherits an error from one.",
+  "caveats": [
+    "upward reserve only \u2014 downward reserve uses charging headroom and is a separate, cheaper product",
+    "assumes reserve is held every hour of the year; a real contract is for defined windows, which would lower the forgone arbitrage",
+    "ignores activation payments and any energy actually delivered when called, both of which improve the case for participating",
+    "DAM arbitrage is the only counterfactual; a desk also running RTM would give up more, so this understates the opportunity cost"
+  ]
+}

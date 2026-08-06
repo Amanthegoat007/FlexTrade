@@ -735,6 +735,24 @@ def export_stress():
         _dump("stress.json", {"error": f"{type(e).__name__}: {e}"})
 
 
+def export_tras():
+    """TRAS reserve opportunity cost — breakeven prices, not assumed revenue.
+
+    Cached like the ISTS scenario: ~1,500 LP solves, and the answer moves with
+    the price record rather than intraday.  Refresh with
+    `python models/tras.py 365`.
+    """
+    src = OUT / "tras.json"
+    if not src.exists():
+        _dump("tras.json", {"error": "not computed yet — run "
+                                     "`python models/tras.py 365`"})
+        return
+    try:
+        _dump("tras.json", json.loads(src.read_text()))
+    except Exception as e:
+        _dump("tras.json", {"error": f"{type(e).__name__}: {e}"})
+
+
 def export_ists_rule():
     """Regulatory scenario: what the draft ISTS charging restriction costs.
 
@@ -986,6 +1004,7 @@ if __name__ == "__main__":
         export_re_state()
         export_stress()
         export_ists_rule()
+        export_tras()
         export_dsm_state()
         export_sqlite_series()
         export_meta()
@@ -1006,5 +1025,6 @@ if __name__ == "__main__":
         export_re_state()
         export_stress()
         export_ists_rule()
+        export_tras()
         export_dsm_state()
         export_meta()  # re-dump so freshness reflects the fetches above
