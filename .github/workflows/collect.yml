@@ -49,10 +49,8 @@ permissions:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
-    # Must exceed LOOP_MINUTES below, or the job is killed mid-loop. It was 8,
-    # which was right for a single shot and would have terminated a 5-hour
-    # collection at minute eight. GitHub's hard cap is 6 hours.
-    timeout-minutes: 340
+    # Must exceed LOOP_MINUTES below, or the job is killed mid-loop.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -82,9 +80,24 @@ jobs:
         # make the history unreadable for humans, so ticks are collected and
         # pushed hourly. The most a cancelled run can lose is the current hour.
         env:
-          LOOP_MINUTES: "300"        # 5 h, comfortably inside the 6 h job cap
+          # A SHORT burst per cron fire, not an all-day loop.
+          #
+          # The first version of this ran 5-hour loops to chase 15-minute
+          # coverage. That is over the line: GitHub's Acceptable Use Policy
+          # forbids using Actions for "serverless computing ... or any other
+          # activity unrelated to the production, testing, deployment, or
+          # publication of the software project", and a 24/7 collector is
+          # exactly that. Scraping itself is fine and commonplace; sitting on a
+          # runner all day is what gets read as resource abuse, and the stated
+          # remedy is losing Actions access — which for us would take the repo
+          # and the collector in one go.
+          #
+          # Three ticks per fire keeps each run to ~45 minutes, which is
+          # ordinary git-scraping usage, and still triples what a single-shot
+          # run collected.
+          LOOP_MINUTES: "45"
           EVERY_SECONDS: "900"       # 15 min
-          PUSH_EVERY_TICKS: "4"      # hourly
+          PUSH_EVERY_TICKS: "3"      # once per run, at the end
         run: |
           git config user.name  "flextrade-collector"
           git config user.email "collector@flextrade.local"
