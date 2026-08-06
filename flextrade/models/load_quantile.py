@@ -66,6 +66,131 @@ def _panel() -> pd.DataFrame:
     return build_features(df).dropna(subset=FEATURES + ["load_mw"])
 
 
+# --- band calibration: regime-conditional and adaptive -------------------
+#
+# The static asymmetric CQR below produced a band that LOOKS calibrated on
+# average and is not calibrated in any individual month. Measured across 8
+# rolling origins (backtest/audit.py load_band):
+#
+#     coverage 81.4% mean against 80% nominal  -- fine
+#     but the windows run 70.9% to 96.9%
+#     Kupiec REJECTS the correct rate in 7 of 8 windows
+#     Christoffersen REJECTS independence in 8 of 8 -- failures CLUSTER
+#
+# Two distinct faults, and the mean hides both. The rate is wrong window to
+# window, and the misses arrive in bursts rather than scattered. For a DISCOM
+# scheduling against DSM penalties those are different risks: a band that fails
+# six days running through a heatwave is a drawdown, not noise.
+#
+# Both point at weather. Delhi's load band fails when cooling demand runs hot
+# for several days together, which is exactly what a margin fitted on a fixed
+# past window cannot track. So the same two mechanisms that fixed the price
+# band apply here:
+#
+#   regime-conditional (Mondrian, Vovk 2003)  margins per cooling-degree-hour
+#                                             band, so a heatwave is calibrated
+#                                             as a heatwave
+#   adaptive (ACI, Gibbs & Candes 2021)       tail levels move against realised
+#                                             miscoverage, so drift is tracked
+#                                             instead of assumed away
+CDH_EDGES = (-0.01, 2.0, 8.0, 1e9)      # mild / warm / hot, in cooling deg-hours
+ACI_GAMMA = 0.02
+REGIME_MIN_N = 400                       # below this a regime uses the global margin
+
+
+def regime_of(cdh) -> np.ndarray:
+    """Map cooling-degree-hours to a load regime index.
+
+    Shared by calibration and serving so the two cannot disagree about which
+    bin a block is in — the same guarantee price_model.regime_of gives.
+    """
+    return np.clip(np.digitize(np.asarray(cdh, dtype=float), CDH_EDGES) - 1,
+                   0, len(CDH_EDGES) - 2)
+
+
+def _adaptive_regime_margins(val: pd.DataFrame, val_pred: dict,
+                             lo_q: float, hi_q: float) -> dict:
+    """Per-regime margins, walked forward over the calibration window.
+
+    Replays the validation window day by day. Each day the margins are read off
+    a trailing window at the CURRENT adaptive tail level, the day is scored, and
+    the level is pushed against whatever miscoverage actually occurred:
+
+        t <- t + gamma * (target - observed_exceedance)
+
+    which holds long-run coverage under arbitrary drift, with no exchangeability
+    assumption to violate — and Delhi's load plainly violates it, growing
+    through the window while the weather swings.
+
+    Replayed from scratch on every retrain rather than carried in a state file:
+    reproducible, auditable, and a stale state file cannot silently mis-size a
+    band the way a stale margin already did once.
+    """
+    alpha = 1 - (hi_q - lo_q)
+    target = alpha / 2
+    nb = len(CDH_EDGES) - 1
+    y = val["load_mw"].values
+    lo_p, hi_p = val_pred[lo_q], val_pred[hi_q]
+    reg = regime_of(val["cdh"].values)
+    days = val.index.normalize()
+    uniq = sorted(set(days))
+
+    tails = [[target, target] for _ in range(nb)]
+    g_tail = [target, target]
+    margins = {b: (0.0, 0.0) for b in range(nb)}
+    g_margin = (0.0, 0.0)
+
+    def q_at(arr, level, default):
+        if len(arr) < REGIME_MIN_N:
+            return default
+        return float(np.quantile(arr, float(np.clip(level, 0.001, 0.999)),
+                                 method="higher"))
+
+    for d in uniq:
+        today = days == d
+        trail = (days < d) & (days >= d - pd.Timedelta(days=45))
+        if trail.sum() < 1000 or not today.any():
+            continue
+        # residual beyond each bound, in MW — the additive form this model has
+        # always used, unlike the price band's multiplicative ratios
+        s_lo, s_hi = lo_p[trail] - y[trail], y[trail] - hi_p[trail]
+        tb = reg[trail]
+        g_margin = (max(q_at(s_lo, 1 - g_tail[0], 0.0), 0.0),
+                    max(q_at(s_hi, 1 - g_tail[1], 0.0), 0.0))
+        for b in range(nb):
+            mb = tb == b
+            margins[b] = (max(q_at(s_lo[mb], 1 - tails[b][0], g_margin[0]), 0.0),
+                          max(q_at(s_hi[mb], 1 - tails[b][1], g_margin[1]), 0.0))
+
+        yt, bt = y[today], reg[today]
+        lo_t = lo_p[today].copy()
+        hi_t = hi_p[today].copy()
+        for b in range(nb):
+            m = bt == b
+            if m.any():
+                lo_t[m] -= margins[b][0]
+                hi_t[m] += margins[b][1]
+        for b in range(nb):
+            m = bt == b
+            if not m.any():
+                continue
+            tails[b][0] += ACI_GAMMA * (target - np.mean(yt[m] < lo_t[m]))
+            tails[b][1] += ACI_GAMMA * (target - np.mean(yt[m] > hi_t[m]))
+            tails[b] = [float(np.clip(x, 0.001, 0.45)) for x in tails[b]]
+
+    return {
+        "mode": "adaptive-regime",
+        "cdh_edges": list(CDH_EDGES),
+        "global": {"lo": round(g_margin[0], 1), "hi": round(g_margin[1], 1)},
+        "regimes": [
+            {"lo_edge": CDH_EDGES[b], "hi_edge": CDH_EDGES[b + 1],
+             "lo": round(margins[b][0], 1), "hi": round(margins[b][1], 1),
+             "tail_lo": round(tails[b][0], 4), "tail_hi": round(tails[b][1], 4),
+             "blocks": int((reg == b).sum())}
+            for b in range(nb)],
+    }
+
+
 def _splits(f: pd.DataFrame):
     """The exact split the point model uses, so the two are comparable."""
     test_start = f.index.max() - pd.DateOffset(months=6)
@@ -146,13 +271,41 @@ def train(quantiles=QUANTILES) -> str:
         s_cov = float(np.mean((yt >= lo - sym) & (yt <= hi + sym)) * 100)
         a_lo, a_hi = lo - m_lo, hi + m_hi
         a_cov = float(np.mean((yt >= a_lo) & (yt <= a_hi)) * 100)
+
+        # --- adaptive regime-conditional, scored on the SAME test window ---
+        ar = _adaptive_regime_margins(val, val_pred, lo_q, hi_q)
+        margins[f"{lo_q}-{hi_q}"]["adaptive_regime"] = ar
+        treg = regime_of(test["cdh"].values)
+        r_lo, r_hi = lo.copy(), hi.copy()
+        for b, spec in enumerate(ar["regimes"]):
+            m = treg == b
+            if m.any():
+                r_lo[m] -= spec["lo"]
+                r_hi[m] += spec["hi"]
+        r_cov = float(np.mean((yt >= r_lo) & (yt <= r_hi)) * 100)
+        # coverage WITHIN each regime — the property a mean cannot show
+        per = []
+        for b in range(len(ar["regimes"])):
+            m = treg == b
+            per.append(round(float(np.mean((yt[m] >= r_lo[m]) & (yt[m] <= r_hi[m]))
+                                   * 100), 1) if m.sum() >= 100 else None)
+        ar["test_coverage_pct"] = round(r_cov, 1)
+        ar["test_coverage_by_regime_pct"] = per
+        ar["test_width_mw"] = round(float(np.mean(r_hi - r_lo)), 0)
         lines += [
             f"  P{lo_q * 100:02.0f}-P{hi_q * 100:02.0f} (nominal {nominal:.0f}%)",
             f"      raw         {raw:5.1f}%  width {np.mean(hi - lo):6.0f} MW",
             f"      symmetric   {s_cov:5.1f}%  width "
             f"{np.mean(hi + sym - lo + sym):6.0f} MW  [+/-{sym:.0f} MW]",
             f"      asymmetric  {a_cov:5.1f}%  width {np.mean(a_hi - a_lo):6.0f} MW"
-            f"  [-{m_lo:.0f} / +{m_hi:.0f} MW]  <- served"]
+            f"  [-{m_lo:.0f} / +{m_hi:.0f} MW]  <- served",
+            f"      adaptive+regime {r_cov:5.1f}%  width {ar['test_width_mw']:6.0f} MW"
+            f"   by CDH regime {ar['test_coverage_by_regime_pct']}"
+            f"   <- CANDIDATE, NOT SERVED (hot regime under-covers)",
+            f"        margins per regime (MW): "
+            + "  ".join(f"[{g['lo_edge']:.0f}-{g['hi_edge']:.0f}h] "
+                        f"-{g['lo']:.0f}/+{g['hi']:.0f}"
+                        for g in ar["regimes"])]
 
     # ---- what the band means operationally ------------------------------
     lo_q, hi_q = BANDS[0]
@@ -192,7 +345,10 @@ def train(quantiles=QUANTILES) -> str:
     ]
 
     CONFORMAL_PATH.write_text(json.dumps({
-        "margins_mw": {k: {n: round(x, 1) for n, x in v.items()}
+        # round the scalar margins; adaptive_regime is a nested block and is
+        # already rounded where it was built
+        "margins_mw": {k: {n: (round(x, 1) if isinstance(x, (int, float)) else x)
+                           for n, x in v.items()}
                        for k, v in margins.items()},
         "quantiles": list(quantiles),
         "calibration_n": len(yv),

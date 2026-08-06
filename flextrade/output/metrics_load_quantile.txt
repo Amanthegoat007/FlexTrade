@@ -14,11 +14,15 @@ interval coverage (raw -> symmetric CQR -> asymmetric CQR):
   P10-P90 (nominal 80%)
       raw          55.6%  width    364 MW
       symmetric    82.4%  width    611 MW  [+/-124 MW]
-      asymmetric   84.2%  width    605 MW  [-91 / +150 MW]  <- served
+      asymmetric   84.2%  width    605 MW  [-91 / +150 MW]
+      adaptive+regime  74.0%  width    531 MW   by CDH regime [74.8, 80.9, 63.7]  <- served
+        margins per regime (MW): [-0-2h] -5/+82  [2-8h] -313/+104  [8-1000000000h] -114/+74
   P05-P95 (nominal 90%)
       raw          70.1%  width    540 MW
       symmetric    91.2%  width    874 MW  [+/-167 MW]
-      asymmetric   92.6%  width    873 MW  [-131 / +202 MW]  <- served
+      asymmetric   92.6%  width    873 MW  [-131 / +202 MW]
+      adaptive+regime  86.4%  width    862 MW   by CDH regime [91.5, 83.1, 72.2]  <- served
+        margins per regime (MW): [-0-2h] -126/+124  [2-8h] -506/+62  [8-1000000000h] -236/+79
 
 operational reading:
   P50 point error (MAPE)             4.33%

@@ -3,12 +3,110 @@
     "0.1-0.9": {
       "lo": 91.1,
       "hi": 149.7,
-      "symmetric": 123.7
+      "symmetric": 123.7,
+      "adaptive_regime": {
+        "mode": "adaptive-regime",
+        "cdh_edges": [
+          -0.01,
+          2.0,
+          8.0,
+          1000000000.0
+        ],
+        "global": {
+          "lo": 114.4,
+          "hi": 73.7
+        },
+        "regimes": [
+          {
+            "lo_edge": -0.01,
+            "hi_edge": 2.0,
+            "lo": 4.8,
+            "hi": 81.8,
+            "tail_lo": 0.1333,
+            "tail_hi": 0.0875,
+            "blocks": 4972
+          },
+          {
+            "lo_edge": 2.0,
+            "hi_edge": 8.0,
+            "lo": 313.4,
+            "hi": 103.5,
+            "tail_lo": 0.0878,
+            "tail_hi": 0.0761,
+            "blocks": 9289
+          },
+          {
+            "lo_edge": 8.0,
+            "hi_edge": 1000000000.0,
+            "lo": 114.4,
+            "hi": 73.7,
+            "tail_lo": 0.0836,
+            "tail_hi": 0.1559,
+            "blocks": 3264
+          }
+        ],
+        "test_coverage_pct": 74.0,
+        "test_coverage_by_regime_pct": [
+          74.8,
+          80.9,
+          63.7
+        ],
+        "test_width_mw": 531.0
+      }
     },
     "0.05-0.95": {
       "lo": 130.9,
       "hi": 202.2,
-      "symmetric": 166.6
+      "symmetric": 166.6,
+      "adaptive_regime": {
+        "mode": "adaptive-regime",
+        "cdh_edges": [
+          -0.01,
+          2.0,
+          8.0,
+          1000000000.0
+        ],
+        "global": {
+          "lo": 235.6,
+          "hi": 79.0
+        },
+        "regimes": [
+          {
+            "lo_edge": -0.01,
+            "hi_edge": 2.0,
+            "lo": 125.9,
+            "hi": 124.1,
+            "tail_lo": 0.0589,
+            "tail_hi": 0.0292,
+            "blocks": 4972
+          },
+          {
+            "lo_edge": 2.0,
+            "hi_edge": 8.0,
+            "lo": 505.8,
+            "hi": 62.3,
+            "tail_lo": 0.035,
+            "tail_hi": 0.0455,
+            "blocks": 9289
+          },
+          {
+            "lo_edge": 8.0,
+            "hi_edge": 1000000000.0,
+            "lo": 235.6,
+            "hi": 79.0,
+            "tail_lo": 0.0686,
+            "tail_hi": 0.1044,
+            "blocks": 3264
+          }
+        ],
+        "test_coverage_pct": 86.4,
+        "test_coverage_by_regime_pct": [
+          91.5,
+          83.1,
+          72.2
+        ],
+        "test_width_mw": 862.0
+      }
     }
   },
   "quantiles": [
