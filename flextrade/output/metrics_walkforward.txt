@@ -1,0 +1,6 @@
+RTM intraday price (vs the hour-ratio incumbent)  —  5 rolling origins (30d each), 12,929 blocks, 2026-03-10 -> 2026-08-06
+  WAPE %   mean     25.473   worst     28.252   std     2.319
+  MAE      mean  1,057.772   worst  1,303.590   std   178.279
+  RMSE     mean  1,530.859   worst  1,796.414   std   189.184
+  bias     mean   -514.540   worst   -688.281   std   137.433
+  Diebold-Mariano vs benchmark: stat -12.671 p=0.0 -> A

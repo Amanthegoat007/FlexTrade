@@ -106,6 +106,77 @@ function Arch() {
   );
 }
 
+/** Rolling-origin re-measurement of the published claims. */
+function WalkForward({ wf }) {
+  const models = wf?.models || [];
+  const done = models.filter((x) => !x.error);
+  return (
+    <>
+      <h2>Walk-forward audit — the same claims, re-measured honestly</h2>
+      <p>
+        Every model above is refitted at each of several consecutive origins and
+        scored only on the window after it, so the scoring data is never inside
+        the training data. What this buys is not a better average — it is a{" "}
+        <strong>distribution</strong> of performance, which makes “worst window”
+        reportable instead of unknown. Rolling-origin evaluation (Tashman 2000)
+        has been the standard in forecasting for decades; we were not using it,
+        and a headline was wrong by 20 points as a result.
+      </p>
+      <p className="note">
+        Bands are scored by <strong>interval score</strong> (Gneiting &amp;
+        Raftery 2007) — width plus a miss penalty, in one proper number. Coverage
+        and width reported as a bare pair can be traded against each other; a
+        proper scoring rule cannot be gamed. Coverage is then tested, not just
+        quoted: <strong>Kupiec (1995)</strong> asks whether the failure rate is
+        right, and <strong>Christoffersen (1998)</strong> asks whether failures
+        are independent or arrive in bursts. The second matters operationally —
+        a band can hit exactly 80% and still fail six days running through a
+        heatwave, which is the same rate and a completely different risk.
+        Model-vs-benchmark uses <strong>Diebold–Mariano</strong> with the
+        Harvey–Leybourne–Newbold small-sample correction, so “better” is a test
+        result rather than two averages compared by eye.
+      </p>
+      {!done.length ? (
+        <Card><div className="note">No walk-forward results exported yet — run
+          <code> python backtest/audit.py all</code>.</div></Card>
+      ) : (
+        <div className="grid cols-2">
+          {done.map((x) => (
+            <Card key={x.key || x.model} title={x.model}
+              sub={`${x.origins_run} rolling origins × ${x.test_days}d · ${x.window}`}>
+              <pre className="formula">{[
+                x.coverage_pct_mean != null &&
+                  `interval score  ${Number(x.interval_score_mean).toLocaleString("en-IN")}  (lower is better)\n` +
+                  `coverage        ${x.coverage_pct_mean}% mean / ${x.coverage_pct_worst}% worst   vs ${x.nominal_pct}% nominal\n` +
+                  `mean width      ${Number(x.width_mean).toLocaleString("en-IN")} ${x.unit || ""}\n` +
+                  `origins below nominal: ${x.origins_below_nominal}/${x.origins_run}` +
+                  (x.kupiec_rejected_origins?.length
+                    ? `\nKupiec REJECTS correct rate at: ${x.kupiec_rejected_origins.join(", ")}` : "") +
+                  (x.independence_rejected_origins?.length
+                    ? `\nChristoffersen REJECTS independence (failures CLUSTER) at: ${x.independence_rejected_origins.join(", ")}` : ""),
+                x.wape_pct && `WAPE   mean ${x.wape_pct.mean}%   worst ${x.wape_pct.worst}%`,
+                x.mae && `MAE    mean ${Number(x.mae.mean).toLocaleString("en-IN")}   worst ${Number(x.mae.worst).toLocaleString("en-IN")} ${x.unit || ""}`,
+                x.bias && `bias   mean ${Number(x.bias.mean).toLocaleString("en-IN")}   worst ${Number(x.bias.worst).toLocaleString("en-IN")} ${x.unit || ""}`,
+                x.vs_benchmark?.stat != null &&
+                  `Diebold-Mariano vs benchmark: stat ${x.vs_benchmark.stat}, p=${x.vs_benchmark.p_value} → ${x.vs_benchmark.better}`,
+              ].filter(Boolean).join("\n")}</pre>
+            </Card>
+          ))}
+        </div>
+      )}
+      <p className="note">
+        Models not listed here have <strong>not</strong> been re-measured yet and
+        their figures above remain single-window. Saying so is the point: staying
+        quiet about which claims are audited would repeat exactly the failure
+        this section exists to correct. Note also that rolling origins share
+        training data, so per-origin results are not independent draws — the
+        aggregates are descriptive, and the hypothesis tests are applied within
+        an origin, never across them.
+      </p>
+    </>
+  );
+}
+
 export default function Methodology() {
   const { data: meta, loading, error } = useApi("/api/meta");
   if (loading && !meta) return <Loading error={error} />;
@@ -244,6 +315,16 @@ export default function Methodology() {
       </Card>
 
       <h2>Measured accuracy (live from the model store)</h2>
+      <p className="note">
+        The figures in this section come from a <strong>single chronological
+        split</strong>: fit on the front of the record, score on the back. That is
+        the standard machine-learning protocol and it is the wrong one for a
+        forecasting system — it reports one window and says nothing about the
+        variance across windows. It cost us: the price band was published here at
+        94.4% coverage and measured 74.7% under a rolling origin. Every claim
+        below should be read against the walk-forward re-measurement that
+        follows it.
+      </p>
       <div className="grid cols-2">
         <Card title="Load model" sub="chronological split, last 6 months held out">
           <pre className="formula">{m.load_model || "not exported"}</pre>
@@ -251,13 +332,15 @@ export default function Methodology() {
         <Card title="Price model (point)" sub="13 months of scraped IEX history">
           <pre className="formula">{m.price_model || "not exported"}</pre>
         </Card>
-        <Card title="Price quantiles + conformal" sub="CQR recomputes its margin on every retrain. On the current data the raw band already covers 82.5% against an 80% target, so the correction is zero — the guard is armed but idle. Read the coverage with the width below, not on its own.">
+        <Card title="Price distribution + band" sub="Quantiles of the censored mixture — a point mass at the ₹10,000 cap plus the below-cap law — with a per-cap-regime margin that adapts online to seasonal drift. Coverage below is walk-forward, and should be read with the width, never on its own.">
           <pre className="formula">{m.price_quantiles || "not exported"}</pre>
         </Card>
         <Card title="Backtests" sub="every day forecast with bid-time-valid features, settled at actual cleared prices">
           <pre className="formula">{[m.backtest_summary, m.risk_backtest_summary].filter(Boolean).join("\n\n") || "not exported"}</pre>
         </Card>
       </div>
+
+      <WalkForward wf={m.walkforward} />
 
       <h2>The forecast lab — four models past the day-ahead curve</h2>
       <p>

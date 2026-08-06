@@ -259,6 +259,18 @@ def export_meta():
     conformal = OUT / "price_conformal.json"
     if conformal.exists():
         metrics["conformal"] = json.loads(conformal.read_text())
+
+    # Rolling-origin re-measurement of the published claims. Deliberately kept
+    # as a SEPARATE block rather than overwriting the single-window metrics:
+    # the point is that a reader can see both numbers and which models have
+    # been re-measured at all. Silence about the unaudited ones would be the
+    # same failure as the single-window headline it replaced.
+    wf = OUT / "walkforward.json"
+    if wf.exists():
+        try:
+            metrics["walkforward"] = json.loads(wf.read_text())
+        except Exception as e:
+            metrics["walkforward"] = {"error": f"{type(e).__name__}: {str(e)[:120]}"}
     lab = OUT / "model_lab.json"
     if lab.exists():
         metrics["model_lab"] = json.loads(lab.read_text())

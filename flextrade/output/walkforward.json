@@ -1,0 +1,587 @@
+{
+ "generated_at": "2026-08-06 17:59:03",
+ "method": "rolling origin, non-overlapping test windows, model refitted at every origin; interval score is Gneiting & Raftery (2007), coverage tests are Kupiec (1995) and Christoffersen (1998)",
+ "models": [
+  {
+   "model": "Delhi day-ahead peak (LightGBM + validation bias correction)",
+   "unit": "MW",
+   "origins_run": 8,
+   "test_days": 30,
+   "window": "2025-10-06 -> 2026-06-02",
+   "blocks": 240,
+   "wape_pct": {
+    "mean": 3.803,
+    "worst": 5.483,
+    "best": 2.13,
+    "std": 1.051
+   },
+   "mae": {
+    "mean": 185.634,
+    "worst": 256.667,
+    "best": 87.098,
+    "std": 55.185
+   },
+   "rmse": {
+    "mean": 239.664,
+    "worst": 316.952,
+    "best": 117.178,
+    "std": 66.092
+   },
+   "bias": {
+    "mean": -34.095,
+    "worst": -205.205,
+    "best": 8.441,
+    "std": 127.009
+   },
+   "vs_benchmark": {
+    "n": 240,
+    "stat": -10.263,
+    "p_value": 0.0,
+    "better": "A"
+   },
+   "origins": [
+    {
+     "test_start": "2025-10-06",
+     "test_end": "2025-11-04",
+     "n": 30,
+     "mae": 235.8164848619486,
+     "rmse": 316.95173926495517,
+     "wape_pct": 5.483304473436724,
+     "bias": 200.9633076082682,
+     "unit": "MW",
+     "benchmark_wape_pct": 13.402703920836355
+    },
+    {
+     "test_start": "2025-11-05",
+     "test_end": "2025-12-04",
+     "n": 30,
+     "mae": 87.09750551132842,
+     "rmse": 117.17847784411919,
+     "wape_pct": 2.1297575718241326,
+     "bias": 8.44076390590479,
+     "unit": "MW",
+     "benchmark_wape_pct": 3.4862432032732102
+    },
+    {
+     "test_start": "2025-12-05",
+     "test_end": "2026-01-03",
+     "n": 30,
+     "mae": 138.74531390199556,
+     "rmse": 169.93586656403195,
+     "wape_pct": 2.8969264286168235,
+     "bias": -28.77522792285269,
+     "unit": "MW",
+     "benchmark_wape_pct": 6.207770288884648
+    },
+    {
+     "test_start": "2026-01-04",
+     "test_end": "2026-02-02",
+     "n": 30,
+     "mae": 256.667213035709,
+     "rmse": 310.5138366939924,
+     "wape_pct": 4.773012373773474,
+     "bias": -205.20496731462208,
+     "unit": "MW",
+     "benchmark_wape_pct": 6.8170889678521185
+    },
+    {
+     "test_start": "2026-02-03",
+     "test_end": "2026-03-04",
+     "n": 30,
+     "mae": 159.23173042076095,
+     "rmse": 225.4439654021736,
+     "wape_pct": 3.671069980983427,
+     "bias": 87.14026441489055,
+     "unit": "MW",
+     "benchmark_wape_pct": 8.153566673408942
+    },
+    {
+     "test_start": "2026-03-05",
+     "test_end": "2026-04-03",
+     "n": 30,
+     "mae": 197.76549156227912,
+     "rmse": 257.90912141655997,
+     "wape_pct": 4.752363735778269,
+     "bias": -94.5955842639105,
+     "unit": "MW",
+     "benchmark_wape_pct": 8.577143667639083
+    },
+    {
+     "test_start": "2026-04-04",
+     "test_end": "2026-05-03",
+     "n": 30,
+     "mae": 164.21336442191904,
+     "rmse": 222.6097439830565,
+     "wape_pct": 3.0943725230803256,
+     "bias": -51.669608496703695,
+     "unit": "MW",
+     "benchmark_wape_pct": 13.497338340150177
+    },
+    {
+     "test_start": "2026-05-04",
+     "test_end": "2026-06-02",
+     "n": 30,
+     "mae": 245.53692612593107,
+     "rmse": 296.7722535127969,
+     "wape_pct": 3.6250113579458008,
+     "bias": -189.05978872611408,
+     "unit": "MW",
+     "benchmark_wape_pct": 17.914910460101176
+    }
+   ],
+   "key": "peak"
+  },
+  {
+   "model": "Delhi load band (P10-P90, asymmetric CQR)",
+   "unit": "MW",
+   "origins_run": 8,
+   "test_days": 30,
+   "window": "2025-10-06 -> 2026-06-02",
+   "blocks": 22859,
+   "coverage_pct_mean": 81.4,
+   "coverage_pct_worst": 70.9,
+   "nominal_pct": 80.0,
+   "origins_below_nominal": 5,
+   "interval_score_mean": 788.1,
+   "width_mean": 531.6,
+   "kupiec_rejected_origins": [
+    "2025-10-06",
+    "2025-11-05",
+    "2025-12-05",
+    "2026-02-03",
+    "2026-03-05",
+    "2026-04-04",
+    "2026-05-04"
+   ],
+   "independence_rejected_origins": [
+    "2025-10-06",
+    "2025-11-05",
+    "2025-12-05",
+    "2026-01-04",
+    "2026-02-03",
+    "2026-03-05",
+    "2026-04-04",
+    "2026-05-04"
+   ],
+   "wape_pct": {
+    "mean": 4.335,
+    "worst": 5.51,
+    "best": 3.157,
+    "std": 0.881
+   },
+   "mae": {
+    "mean": 166.397,
+    "worst": 208.21,
+    "best": 102.314,
+    "std": 39.86
+   },
+   "rmse": {
+    "mean": 225.683,
+    "worst": 289.445,
+    "best": 137.272,
+    "std": 52.445
+   },
+   "bias": {
+    "mean": -69.28,
+    "worst": -143.461,
+    "best": 30.178,
+    "std": 74.861
+   },
+   "origins": [
+    {
+     "test_start": "2025-10-06",
+     "test_end": "2025-11-04",
+     "n": 2880,
+     "interval_score": 1048.5345714593107,
+     "coverage_pct": 71.25,
+     "nominal_pct": 80.0,
+     "width": 614.5788204985049,
+     "below_pct": 27.743055555555557,
+     "above_pct": 1.0069444444444444,
+     "kupiec": {
+      "n": 2880,
+      "exceedances": 828,
+      "rate_pct": 28.75,
+      "nominal_pct": 20.0,
+      "lr": 125.598,
+      "p_value": 0.0
+     },
+     "christoffersen": {
+      "n00": 1985,
+      "n01": 66,
+      "n10": 66,
+      "n11": 762,
+      "lr_ind": 2410.804,
+      "p_value_ind": 0.0,
+      "lr_cc": 2536.402,
+      "p_value_cc": 0.0
+     },
+     "mae": 185.77712421694983,
+     "rmse": 258.93257803399104,
+     "wape_pct": 5.1820183236484105,
+     "bias": 109.64803623041149,
+     "unit": "MW",
+     "pinball_q10": 71.03408477584674,
+     "pinball_q50": 92.88856210847491,
+     "pinball_q90": 42.592965946185295
+    },
+    {
+     "test_start": "2025-11-05",
+     "test_end": "2025-12-04",
+     "n": 2880,
+     "interval_score": 536.0947997380939,
+     "coverage_pct": 96.875,
+     "nominal_pct": 80.0,
+     "width": 521.3129363042598,
+     "below_pct": 1.9097222222222223,
+     "above_pct": 1.215277777777778,
+     "kupiec": {
+      "n": 2880,
+      "exceedances": 90,
+      "rate_pct": 3.12,
+      "nominal_pct": 20.0,
+      "lr": 733.85,
+      "p_value": 0.0
+     },
+     "christoffersen": {
+      "n00": 2763,
+      "n01": 26,
+      "n10": 26,
+      "n11": 64,
+      "lr_ind": 397.844,
+      "p_value_ind": 0.0,
+      "lr_cc": 1131.694,
+      "p_value_cc": 0.0
+     },
+     "mae": 114.33699912635205,
+     "rmse": 137.27200688593848,
+     "wape_pct": 3.6616662533126476,
+     "bias": -97.53051400838623,
+     "unit": "MW",
+     "pinball_q10": 21.759663360578365,
+     "pinball_q50": 57.16849956317603,
+     "pinball_q90": 31.551151533756315
+    },
+    {
+     "test_start": "2025-12-05",
+     "test_end": "2026-01-03",
+     "n": 2876,
+     "interval_score": 571.9856607656295,
+     "coverage_pct": 85.91794158553546,
+     "nominal_pct": 80.0,
+     "width": 456.1238876843103,
+     "below_pct": 3.2684283727399164,
+     "above_pct": 10.813630041724617,
+     "kupiec": {
+      "n": 2876,
+      "exceedances": 405,
+      "rate_pct": 14.08,
+      "nominal_pct": 20.0,
+      "lr": 68.518,
+      "p_value": 0.0
+     },
+     "christoffersen": {
+      "n00": 2380,
+      "n01": 90,
+      "n10": 90,
+      "n11": 315,
+      "lr_ind": 1135.667,
+      "p_value_ind": 0.0,
+      "lr_cc": 1204.185,
+      "p_value_cc": 0.0
+     },
+     "mae": 134.58617113295932,
+     "rmse": 176.7097357928002,
+     "wape_pct": 3.9449345942012486,
+     "bias": -98.20485113713205,
+     "unit": "MW",
+     "pinball_q10": 25.082142883015067,
+     "pinball_q50": 67.29308556647966,
+     "pinball_q90": 52.73416566573068
+    },
+    {
+     "test_start": "2026-01-04",
+     "test_end": "2026-02-02",
+     "n": 2860,
+     "interval_score": 994.1677393671077,
+     "coverage_pct": 79.12587412587413,
+     "nominal_pct": 80.0,
+     "width": 646.3249428399272,
+     "below_pct": 2.6573426573426575,
+     "above_pct": 18.216783216783217,
+     "kupiec": {
+      "n": 2860,
+      "exceedances": 597,
+      "rate_pct": 20.87,
+      "nominal_pct": 20.0,
+      "lr": 1.351,
+      "p_value": 0.2451
+     },
+     "christoffersen": {
+      "n00": 2178,
+      "n01": 84,
+      "n10": 84,
+      "n11": 513,
+      "lr_ind": 1726.651,
+      "p_value_ind": 0.0,
+      "lr_cc": 1728.002,
+      "p_value_cc": 0.0
+     },
+     "mae": 208.16383115524326,
+     "rmse": 289.44512090559107,
+     "wape_pct": 5.50980384493633,
+     "bias": -119.80781211609433,
+     "unit": "MW",
+     "pinball_q10": 43.89248733028527,
+     "pinball_q50": 104.08191557762163,
+     "pinball_q90": 62.27119626439613
+    },
+    {
+     "test_start": "2026-02-03",
+     "test_end": "2026-03-04",
+     "n": 2880,
+     "interval_score": 606.6153590593385,
+     "coverage_pct": 90.72916666666667,
+     "nominal_pct": 80.0,
+     "width": 411.7879180855818,
+     "below_pct": 6.25,
+     "above_pct": 3.0208333333333335,
+     "kupiec": {
+      "n": 2880,
+      "exceedances": 267,
+      "rate_pct": 9.27,
+      "nominal_pct": 20.0,
+      "lr": 247.133,
+      "p_value": 0.0
+     },
+     "christoffersen": {
+      "n00": 2588,
+      "n01": 25,
+      "n10": 24,
+      "n11": 242,
+      "lr_ind": 1334.804,
+      "p_value_ind": 0.0,
+      "lr_cc": 1581.937,
+      "p_value_cc": 0.0
+     },
+     "mae": 102.31427736574878,
+     "rmse": 169.52082129944023,
+     "wape_pct": 3.1570550814081626,
+     "bias": -30.17787485754344,
+     "unit": "MW",
+     "pinball_q10": 32.410920097361874,
+     "pinball_q50": 51.15713868287439,
+     "pinball_q90": 23.064451854131924
+    },
+    {
+     "test_start": "2026-03-05",
+     "test_end": "2026-04-03",
+     "n": 2800,
+     "interval_score": 862.0125685955852,
+     "coverage_pct": 70.92857142857143,
+     "nominal_pct": 80.0,
+     "width": 437.40815432175947,
+     "below_pct": 7.035714285714286,
+     "above_pct": 22.035714285714285,
+     "kupiec": {
+      "n": 2800,
+      "exceedances": 814,
+      "rate_pct": 29.07,
+      "nominal_pct": 20.0,
+      "lr": 130.867,
+      "p_value": 0.0
+     },
+     "christoffersen": {
+      "n00": 1895,
+      "n01": 90,
+      "n10": 91,
+      "n11": 723,
+      "lr_ind": 2070.249,
+      "p_value_ind": 0.0,
+      "lr_cc": 2201.116,
+      "p_value_cc": 0.0
+     },
+     "mae": 189.62378421491718,
+     "rmse": 249.26914357036344,
+     "wape_pct": 5.330144407822014,
+     "bias": -109.09334560598064,
+     "unit": "MW",
+     "pinball_q10": 45.63185110617238,
+     "pinball_q50": 94.81189210745859,
+     "pinball_q90": 56.3941144525484
+    },
+    {
+     "test_start": "2026-04-04",
+     "test_end": "2026-05-03",
+     "n": 2880,
+     "interval_score": 822.9636129578017,
+     "coverage_pct": 78.09027777777777,
+     "nominal_pct": 80.0,
+     "width": 545.683435983903,
+     "below_pct": 5.625,
+     "above_pct": 16.28472222222222,
+     "kupiec": {
+      "n": 2880,
+      "exceedances": 631,
+      "rate_pct": 21.91,
+      "nominal_pct": 20.0,
+      "lr": 6.416,
+      "p_value": 0.0113
+     },
+     "christoffersen": {
+      "n00": 2182,
+      "n01": 66,
+      "n10": 66,
+      "n11": 565,
+      "lr_ind": 2009.29,
+      "p_value_ind": 0.0,
+      "lr_cc": 2015.706,
+      "p_value_cc": 0.0
+     },
+     "mae": 208.2100971336687,
+     "rmse": 273.25665736741337,
+     "wape_pct": 4.588884807559142,
+     "bias": -143.4611459470808,
+     "unit": "MW",
+     "pinball_q10": 40.38170513117189,
+     "pinball_q50": 104.10504856683436,
+     "pinball_q90": 53.58201453741135
+    },
+    {
+     "test_start": "2026-05-04",
+     "test_end": "2026-06-02",
+     "n": 2803,
+     "interval_score": 862.2545789166052,
+     "coverage_pct": 78.16625044595077,
+     "nominal_pct": 80.0,
+     "width": 619.6982610003379,
+     "below_pct": 8.241170174812702,
+     "above_pct": 13.592579379236533,
+     "kupiec": {
+      "n": 2803,
+      "exceedances": 612,
+      "rate_pct": 21.83,
+      "nominal_pct": 20.0,
+      "lr": 5.762,
+      "p_value": 0.0164
+     },
+     "christoffersen": {
+      "n00": 2088,
+      "n01": 102,
+      "n10": 102,
+      "n11": 510,
+      "lr_ind": 1565.248,
+      "p_value_ind": 0.0,
+      "lr_cc": 1571.01,
+      "p_value_cc": 0.0
+     },
+     "mae": 188.16653799369982,
+     "rmse": 251.05765600951537,
+     "wape_pct": 3.305661950491919,
+     "bias": -65.61083302204395,
+     "unit": "MW",
+     "pinball_q10": 41.49626251798829,
+     "pinball_q50": 94.08326899684991,
+     "pinball_q90": 58.598873357811456
+    }
+   ],
+   "key": "load_band"
+  },
+  {
+   "model": "RTM intraday price (vs the hour-ratio incumbent)",
+   "unit": "Rs/MWh",
+   "origins_run": 5,
+   "test_days": 30,
+   "window": "2026-03-10 -> 2026-08-06",
+   "blocks": 12929,
+   "wape_pct": {
+    "mean": 25.473,
+    "worst": 28.252,
+    "best": 21.762,
+    "std": 2.319
+   },
+   "mae": {
+    "mean": 1057.772,
+    "worst": 1303.59,
+    "best": 787.045,
+    "std": 178.279
+   },
+   "rmse": {
+    "mean": 1530.859,
+    "worst": 1796.414,
+    "best": 1242.689,
+    "std": 189.184
+   },
+   "bias": {
+    "mean": -514.54,
+    "worst": -688.281,
+    "best": 310.853,
+    "std": 137.433
+   },
+   "vs_benchmark": {
+    "n": 12929,
+    "stat": -12.671,
+    "p_value": 0.0,
+    "better": "A"
+   },
+   "origins": [
+    {
+     "test_start": "2026-03-10",
+     "test_end": "2026-04-08",
+     "n": 2805,
+     "mae": 787.0446224146019,
+     "rmse": 1242.6888069190807,
+     "wape_pct": 21.762188201067957,
+     "bias": -310.8531725995561,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": 32.68446084033993
+    },
+    {
+     "test_start": "2026-04-09",
+     "test_end": "2026-05-08",
+     "n": 2880,
+     "mae": 1120.0230597748107,
+     "rmse": 1567.154480798832,
+     "wape_pct": 24.29568614623974,
+     "bias": -594.6226478780369,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": 26.415957563097308
+    },
+    {
+     "test_start": "2026-05-09",
+     "test_end": "2026-06-07",
+     "n": 2880,
+     "mae": 1303.5904826624787,
+     "rmse": 1796.4142684659773,
+     "wape_pct": 28.252074892167624,
+     "bias": -688.2810079721795,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": 30.127339295110232
+    },
+    {
+     "test_start": "2026-06-08",
+     "test_end": "2026-07-07",
+     "n": 2880,
+     "mae": 1140.6490728749375,
+     "rmse": 1633.5169650259731,
+     "wape_pct": 27.472819510707847,
+     "bias": -576.3459068199099,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": 32.73365309327559
+    },
+    {
+     "test_start": "2026-07-08",
+     "test_end": "2026-08-06",
+     "n": 1484,
+     "mae": 937.5540705132155,
+     "rmse": 1414.5213296104127,
+     "wape_pct": 25.58130205698803,
+     "bias": -402.5951119128859,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": 29.554007869413656
+    }
+   ],
+   "key": "rtm"
+  }
+ ]
+}
