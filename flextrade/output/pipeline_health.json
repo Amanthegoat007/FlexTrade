@@ -1,10 +1,10 @@
 {
- "last_run_at": "2026-08-06 18:02:29",
+ "last_run_at": "2026-08-10 11:54:31",
  "stage": "complete",
  "ok": true,
  "detail": "",
- "delivery_day": "2026-08-07",
- "peak_load_mw": 5880.0,
+ "delivery_day": "2026-08-11",
+ "peak_load_mw": 6081.0,
  "forecast_lab": {
   "peak": "ok",
   "dsm_exposure": "ok",

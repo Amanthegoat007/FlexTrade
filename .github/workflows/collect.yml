@@ -104,18 +104,50 @@ jobs:
           END=$(( $(date +%s) + 60 * LOOP_MINUTES ))
           tick=0; captured=0; failed=0
 
+          BR="${GITHUB_REF_NAME}"
+          push_failed=0
+
+          # Commit and push, LOUDLY.
+          #
+          # The previous version asked "is anything staged?" and returned 0 when
+          # the answer was no. That is the wrong question and it hid a total
+          # failure for a full day: the first push failed silently (a bare
+          # `git push ... && echo` reports nothing and does not exit non-zero),
+          # the commit stayed local, and every later call then found nothing
+          # staged — because the rows were already committed — and reported that
+          # as normal. Run #7 collected for 287 minutes across ~20 ticks, went
+          # green, and delivered nothing to the branch.
+          #
+          # So: ask whether anything is UNPUSHED, capture push output instead of
+          # discarding it, and verify the remote actually moved afterwards.
           push_now () {
             git add -A data/collected
-            if git diff --cached --quiet; then
-              echo "::warning::nothing staged after ${tick} ticks"
+            git diff --cached --quiet || \
+              git commit -q -m "collect $(date -u '+%Y-%m-%d %H:%M UTC') (${tick} ticks)"
+
+            git fetch -q --depth=1 origin "$BR" 2>/dev/null || true
+            ahead=$(git rev-list --count "origin/${BR}..HEAD" 2>/dev/null || echo 0)
+            if [ "$ahead" -eq 0 ]; then
+              echo "nothing to push (no unpushed commits)"
               return 0
             fi
-            git commit -q -m "collect $(date -u '+%Y-%m-%d %H:%M UTC') (${tick} ticks)"
+            echo "pushing ${ahead} commit(s) to ${BR}"
+
             for i in 1 2 3; do
-              git pull --rebase --autostash -q origin "${GITHUB_REF_NAME}" && break
+              if out=$(git push origin "HEAD:${BR}" 2>&1); then
+                echo "pushed at tick ${tick}"
+                push_failed=0
+                return 0
+              fi
+              echo "push attempt ${i} FAILED:"
+              echo "${out}" | sed 's/^/    /'
+              # remote moved under us: rebase our data commits on top and retry
+              git fetch -q --depth=50 origin "$BR" || true
+              git rebase -q "origin/${BR}" || { git rebase --abort || true; }
               sleep 5
             done
-            git push -q origin "HEAD:${GITHUB_REF_NAME}" && echo "pushed at tick ${tick}"
+            push_failed=1
+            return 1
           }
 
           while [ "$(date +%s)" -lt "$END" ]; do
@@ -127,14 +159,35 @@ jobs:
               failed=$((failed + 1))
               echo "::warning::tick ${tick} captured nothing"
             fi
-            [ $((tick % PUSH_EVERY_TICKS)) -eq 0 ] && push_now
+            if [ $((tick % PUSH_EVERY_TICKS)) -eq 0 ]; then push_now || true; fi
             # do not sleep past the deadline
             now=$(date +%s)
-            [ $((now + EVERY_SECONDS)) -lt "$END" ] && sleep "$EVERY_SECONDS" || break
+            if [ $((now + EVERY_SECONDS)) -lt "$END" ]; then
+              sleep "$EVERY_SECONDS"
+            else
+              break
+            fi
           done
 
-          push_now
+          push_now || true
           echo "loop done: ${tick} ticks, ${captured} captured, ${failed} empty"
+
+          # A summary survives without admin rights on the logs, which is how
+          # this failure stayed invisible for a day.
+          {
+            echo "### collect"
+            echo "- ticks: ${tick}, captured: ${captured}, empty: ${failed}"
+            echo "- unpushed commits at exit: $(git rev-list --count origin/${BR}..HEAD 2>/dev/null || echo '?')"
+            echo "- remote ${BR}: $(git rev-parse --short origin/${BR} 2>/dev/null || echo '?')"
+          } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+          # A push that never landed is a FAILURE, however green the collection
+          # looked. This is the check whose absence hid everything.
+          left=$(git rev-list --count "origin/${BR}..HEAD" 2>/dev/null || echo 0)
+          if [ "$push_failed" -eq 1 ] || [ "$left" -gt 0 ]; then
+            echo "::error::collected ${captured} ticks but ${left} commit(s) never reached ${BR}. If the push output above shows 403, set Settings -> Actions -> General -> Workflow permissions to 'Read and write permissions'."
+            exit 1
+          fi
           # Every single tick failing is not a quiet upstream — it is a broken
           # collector or a runner that cannot reach these hosts.
           if [ "$captured" -eq 0 ]; then
