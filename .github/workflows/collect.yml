@@ -120,30 +120,63 @@ jobs:
           #
           # So: ask whether anything is UNPUSHED, capture push output instead of
           # discarding it, and verify the remote actually moved afterwards.
+          # Ask the SERVER what the branch points at. Never ancestry math.
+          #
+          # This is the third time this function has hidden a total failure, and
+          # every time the mechanism was the same: an error path defaulting to
+          # the value that means "all good". The last version ran
+          #
+          #     ahead=$(git rev-list --count "origin/${BR}..HEAD" 2>/dev/null || echo 0)
+          #
+          # but actions/checkout leaves a DETACHED HEAD with no usable
+          # origin/<branch> remote-tracking ref, so rev-list errors, `|| echo 0`
+          # turns that into 0, and 0 reads as "nothing to push". Proven in a
+          # shallow clone: commit a row, run that line, get 0. 139 runs went
+          # green on it while collecting correctly and delivering nothing.
+          #
+          # git ls-remote queries the remote directly. It needs no local refs
+          # and does not care how shallow the clone is, so it cannot be fooled
+          # by the checkout layout.
+          remote_sha () { git ls-remote origin "refs/heads/${BR}" 2>/dev/null | cut -f1; }
+
           push_now () {
             git add -A data/collected
-            git diff --cached --quiet || \
+            if git diff --cached --quiet; then
+              echo "no new rows staged this round"
+            else
               git commit -q -m "collect $(date -u '+%Y-%m-%d %H:%M UTC') (${tick} ticks)"
+            fi
 
-            git fetch -q --depth=1 origin "$BR" 2>/dev/null || true
-            ahead=$(git rev-list --count "origin/${BR}..HEAD" 2>/dev/null || echo 0)
-            if [ "$ahead" -eq 0 ]; then
-              echo "nothing to push (no unpushed commits)"
+            local head before
+            head=$(git rev-parse HEAD)
+            before=$(remote_sha)
+            if [ -z "$before" ]; then
+              echo "::error::cannot read refs/heads/${BR} from origin — no push is possible"
+              push_failed=1
+              return 1
+            fi
+            if [ "$head" = "$before" ]; then
+              echo "remote ${BR} already at ${head:0:7} — nothing to push"
               return 0
             fi
-            echo "pushing ${ahead} commit(s) to ${BR}"
 
             for i in 1 2 3; do
               if out=$(git push origin "HEAD:${BR}" 2>&1); then
-                echo "pushed at tick ${tick}"
-                push_failed=0
-                return 0
+                # do not trust the exit code alone — confirm the branch MOVED
+                if [ "$(remote_sha)" = "$head" ]; then
+                  echo "pushed ${head:0:7} to ${BR} at tick ${tick}"
+                  push_failed=0
+                  return 0
+                fi
+                echo "push reported success but ${BR} is still $(remote_sha | cut -c1-7)"
+              else
+                echo "push attempt ${i} FAILED:"
+                echo "${out}" | sed 's/^/    /'
               fi
-              echo "push attempt ${i} FAILED:"
-              echo "${out}" | sed 's/^/    /'
-              # remote moved under us: rebase our data commits on top and retry
-              git fetch -q --depth=50 origin "$BR" || true
-              git rebase -q "origin/${BR}" || { git rebase --abort || true; }
+              # remote may have moved under us — replay our commit on top
+              git fetch -q --depth=50 origin "$BR" 2>&1 | sed 's/^/    /' || true
+              git rebase -q FETCH_HEAD 2>&1 | sed 's/^/    /' || { git rebase --abort >/dev/null 2>&1 || true; }
+              head=$(git rev-parse HEAD)
               sleep 5
             done
             push_failed=1
@@ -174,20 +207,24 @@ jobs:
 
           # A summary survives without admin rights on the logs, which is how
           # this failure stayed invisible for a day.
+          # Did the branch on the SERVER end up where our HEAD is? That is the
+          # only question, and ls-remote is the only thing that answers it
+          # without depending on the checkout's ref layout.
+          head_final=$(git rev-parse HEAD)
+          remote_final=$(remote_sha)
           {
             echo "### collect"
             echo "- ticks: ${tick}, captured: ${captured}, empty: ${failed}"
-            echo "- unpushed commits at exit: $(git rev-list --count origin/${BR}..HEAD 2>/dev/null || echo '?')"
-            echo "- remote ${BR}: $(git rev-parse --short origin/${BR} 2>/dev/null || echo '?')"
+            echo "- local HEAD : ${head_final:0:7}"
+            echo "- remote ${BR}: ${remote_final:0:7}"
+            echo "- delivered  : $([ "$head_final" = "$remote_final" ] && echo yes || echo NO)"
           } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
-          # A push that never landed is a FAILURE, however green the collection
-          # looked. This is the check whose absence hid everything.
-          left=$(git rev-list --count "origin/${BR}..HEAD" 2>/dev/null || echo 0)
-          if [ "$push_failed" -eq 1 ] || [ "$left" -gt 0 ]; then
-            echo "::error::collected ${captured} ticks but ${left} commit(s) never reached ${BR}. If the push output above shows 403, set Settings -> Actions -> General -> Workflow permissions to 'Read and write permissions'."
+          if [ "$push_failed" -eq 1 ] || [ "$head_final" != "$remote_final" ]; then
+            echo "::error::collected ${captured} ticks but ${BR} is at ${remote_final:0:7} while HEAD is ${head_final:0:7} — the data did NOT land. If the push output above shows 403, set Settings -> Actions -> General -> Workflow permissions to 'Read and write permissions'."
             exit 1
           fi
+          echo "delivered: ${BR} is at ${remote_final:0:7}"
           # Every single tick failing is not a quiet upstream — it is a broken
           # collector or a runner that cannot reach these hosts.
           if [ "$captured" -eq 0 ]; then
