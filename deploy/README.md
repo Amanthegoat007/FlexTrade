@@ -59,14 +59,27 @@ Attach `AWSLambdaBasicExecutionRole`. Name it `flextrade-collector-role`.
 Then Add permissions -> Create inline policy -> JSON, replacing BUCKET:
 
 ```json
-{"Version": "2012-10-17", "Statement": [{
-  "Effect": "Allow",
-  "Action": ["s3:GetObject", "s3:PutObject"],
-  "Resource": "arn:aws:s3:::BUCKET/collected/*"}]}
+{"Version": "2012-10-17", "Statement": [
+  {"Effect": "Allow",
+   "Action": ["s3:GetObject", "s3:PutObject"],
+   "Resource": "arn:aws:s3:::BUCKET/collected/*"},
+  {"Effect": "Allow",
+   "Action": ["s3:ListBucket"],
+   "Resource": "arn:aws:s3:::BUCKET"}
+]}
 ```
 
 Scoped to one prefix on one bucket. If the function is ever compromised it can
 touch nothing else in the account.
+
+`ListBucket` is not optional despite nothing here listing anything. S3 reports
+a missing key as 404 NoSuchKey only to callers who can list the bucket; to
+everyone else the same miss comes back as 403 AccessDenied, because S3 will
+not confirm or deny that a key exists to someone without list rights. The
+first write of every UTC day reads a key that is not there yet, so without
+this the collector cannot tell "new day" from "broken policy". The handler
+tolerates both codes anyway, but granting it keeps a real permission failure
+distinguishable from an empty day.
 
 ### 4. Lambda function
 Lambda -> Create function -> Author from scratch.

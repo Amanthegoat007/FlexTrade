@@ -39,6 +39,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 import boto3
+from botocore.exceptions import ClientError
 
 BUCKET = os.environ["BUCKET"]
 PREFIX = os.environ.get("PREFIX", "collected")
@@ -124,8 +125,17 @@ def _store(source: str, rows: list[dict], dedupe: tuple[str, ...] = ()) -> int:
     key, existing = _key(source), ""
     try:
         existing = s3.get_object(Bucket=BUCKET, Key=key)["Body"].read().decode()
-    except s3.exceptions.NoSuchKey:
-        pass
+    except ClientError as e:
+        # The first write of any UTC day is a genuine miss. S3 reports that as
+        # NoSuchKey only to callers who hold s3:ListBucket — without it the
+        # same miss comes back as 403 AccessDenied, because S3 refuses to
+        # confirm or deny a key's existence to someone who cannot list. The
+        # policy in deploy/README.md grants ListBucket so the two stay
+        # distinguishable, but a genuine permission failure still surfaces
+        # loudly one line later when put_object is refused.
+        if e.response["Error"]["Code"] not in ("NoSuchKey", "404",
+                                               "AccessDenied", "403"):
+            raise
 
     seen = set()
     if existing and dedupe:
