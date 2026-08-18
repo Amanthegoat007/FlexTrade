@@ -18,10 +18,10 @@ interval coverage (raw -> symmetric CQR -> asymmetric CQR):
         by CDH regime [88.2, 82.0, 72.5]   n [10956, 3262, 3151]
       mondrian     78.9%  width    594 MW   by CDH regime [75.1, 80.3, 91.0]
         margins per regime (MW): [-0-2h] -108/+51  [2-8h] -103/+129  [8-1000000000h] -0/+476
-      trailing45   78.7%  width    528 MW   by CDH regime [80.0, 77.3, 76.1]   <- SERVED (recalibrated daily, walk-forward)
-        interval score (lower better): symmetric  859.7   asymmetric  828.7   mondrian  854.2   trailing45  791.0   adaptive+regime  870.1
-      adaptive+regime  74.0%  width    531 MW   by CDH regime [74.8, 80.9, 63.7]   <- CANDIDATE, NOT SERVED (hot regime under-covers)
-        margins per regime (MW): [-0-2h] -5/+82  [2-8h] -313/+104  [8-1000000000h] -114/+74
+      trailing14  80.0%  width    564 MW   by CDH regime [82.1, 77.1, 76.0]   <- SERVED (recalibrated daily, walk-forward)
+        interval score (lower better): symmetric  859.7   asymmetric  828.7   mondrian  854.2   trailing14  816.6   adaptive+regime  806.6
+      adaptive+regime  74.0%  width    466 MW   by CDH regime [76.4, 73.4, 66.3]   <- CANDIDATE, NOT SERVED (hot regime under-covers)
+        margins per regime (MW): [-0-2h] -0/+96  [2-8h] -0/+111  [8-1000000000h] -0/+111
   P05-P95 (nominal 90%)
       raw          70.1%  width    540 MW
       symmetric    91.2%  width    874 MW  [+/-167 MW]
@@ -29,10 +29,10 @@ interval coverage (raw -> symmetric CQR -> asymmetric CQR):
         by CDH regime [95.0, 92.6, 84.6]   n [10956, 3262, 3151]
       mondrian     88.7%  width    848 MW   by CDH regime [87.0, 87.0, 96.4]
         margins per regime (MW): [-0-2h] -160/+70  [2-8h] -142/+128  [8-1000000000h] -1/+619
-      trailing45   89.6%  width    773 MW   by CDH regime [90.7, 89.6, 86.0]   <- SERVED (recalibrated daily, walk-forward)
-        interval score (lower better): symmetric 1135.7   asymmetric 1102.3   mondrian 1156.7   trailing45 1067.2   adaptive+regime 1247.5
-      adaptive+regime  86.4%  width    862 MW   by CDH regime [91.5, 83.1, 72.2]   <- CANDIDATE, NOT SERVED (hot regime under-covers)
-        margins per regime (MW): [-0-2h] -126/+124  [2-8h] -506/+62  [8-1000000000h] -236/+79
+      trailing14  89.2%  width    787 MW   by CDH regime [90.7, 87.5, 85.3]   <- SERVED (recalibrated daily, walk-forward)
+        interval score (lower better): symmetric 1135.7   asymmetric 1102.3   mondrian 1156.7   trailing14 1081.4   adaptive+regime 1080.7
+      adaptive+regime  85.8%  width    677 MW   by CDH regime [89.0, 84.0, 76.5]   <- CANDIDATE, NOT SERVED (hot regime under-covers)
+        margins per regime (MW): [-0-2h] -0/+138  [2-8h] -0/+132  [8-1000000000h] -0/+132
 
 operational reading:
   P50 point error (MAPE)             4.33%
@@ -42,9 +42,9 @@ operational reading:
   This matters for DSM in one direction only -- under-scheduling is
   what draws deviation charges -- so it is corrected by the conformal
   margin above rather than left for the operator to discover.
-  80% band width, mean                528 MW (13.3% of load)
+  80% band width, mean                564 MW (14.2% of load)
   blocks where P50 lands inside the CERC DSM +/-12% band   96.0%
-  blocks where our whole 80% band fits inside it             96.6%
+  blocks where our whole 80% band fits inside it             93.9%
 
 The second number is the one a DISCOM buys: it is the share of the day
 we can promise a schedule with quantified confidence rather than a

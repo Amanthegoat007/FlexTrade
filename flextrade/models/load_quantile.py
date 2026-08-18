@@ -94,6 +94,20 @@ def _panel() -> pd.DataFrame:
 #                                             miscoverage, so drift is tracked
 #                                             instead of assumed away
 CDH_EDGES = (-0.01, 2.0, 8.0, 1e9)      # mild / warm / hot, in cooling deg-hours
+# Trailing calibration window, in days. Swept on the rolling-origin audit
+# (8 origins x 30d), and shorter is decisively better — 45 days adapts too
+# slowly to be calibrated:
+#
+#   window   interval score   coverage mean / worst   Kupiec rejects
+#   static        788.1          81.4% / 70.9%             7/8
+#   45d           770.9          77.5% / 66.9%             7/8
+#   14d           761.9          80.2% / 77.7%             4/8   <- adopted
+#
+# Do not read a sweep below ~11 days: the trail.sum() < 1000 guard falls back
+# to the static margin there (7 days x 96 blocks = 672), so a 7-day run
+# reproduces the static numbers exactly and looks like a plateau rather than
+# the fallback it is.
+TRAIL_DAYS = 14
 ACI_GAMMA = 0.02
 REGIME_MIN_N = 400                       # below this a regime uses the global margin
 
@@ -148,7 +162,7 @@ def _adaptive_regime_margins(val: pd.DataFrame, val_pred: dict,
 
     for d in uniq:
         today = days == d
-        trail = (days < d) & (days >= d - pd.Timedelta(days=45))
+        trail = (days < d) & (days >= d - pd.Timedelta(days=TRAIL_DAYS))
         if trail.sum() < 1000 or not today.any():
             continue
         # residual beyond each bound, in MW — the additive form this model has
@@ -349,7 +363,7 @@ def train(quantiles=QUANTILES) -> str:
         t_lo, t_hi = lo.copy(), hi.copy()
         test_day = test.index.normalize()
         for d in sorted(set(test_day)):
-            trail = (cal_day < d) & (cal_day >= d - pd.Timedelta(days=45))
+            trail = (cal_day < d) & (cal_day >= d - pd.Timedelta(days=TRAIL_DAYS))
             today = test_day == d
             if trail.sum() < 1000 or not today.any():
                 t_lo[today] -= m_lo
@@ -379,7 +393,7 @@ def train(quantiles=QUANTILES) -> str:
         # was measured against, and dropping them would make the change
         # untraceable.
         last = cal_day.max()
-        fin = (cal_day > last - pd.Timedelta(days=45))
+        fin = (cal_day > last - pd.Timedelta(days=TRAIL_DAYS))
         if fin.sum() >= 1000:
             nf = int(fin.sum())
             side_f = min((1 - alpha / 2) * (1 + 1 / nf), 1.0)
@@ -390,9 +404,9 @@ def train(quantiles=QUANTILES) -> str:
             margins[f"{lo_q}-{hi_q}"].update({
                 "lo": f_lo, "hi": f_hi,
                 "lo_static": m_lo, "hi_static": m_hi,
-                "mode": "trailing45",
-                "trailing_days": 45, "trailing_n": nf,
-                "trailing_from": str((last - pd.Timedelta(days=45)).date()),
+                "mode": f"trailing{TRAIL_DAYS}",
+                "trailing_days": TRAIL_DAYS, "trailing_n": nf,
+                "trailing_from": str((last - pd.Timedelta(days=TRAIL_DAYS)).date()),
                 "trailing_to": str(last.date())})
         t_per = [round(float(np.mean((yt[treg0 == b] >= t_lo[treg0 == b])
                                      & (yt[treg0 == b] <= t_hi[treg0 == b])) * 100), 1)
@@ -462,11 +476,11 @@ def train(quantiles=QUANTILES) -> str:
                         f"-{g['lo']:.0f}/+{g['hi']:.0f}"
                         + ("*" if g["fallback"] else "")
                         for b, g in enumerate(mond)),
-            f"      trailing45  {t_cov:5.1f}%  width {np.mean(t_hi - t_lo):6.0f} MW"
+            f"      trailing{TRAIL_DAYS:<3d}{t_cov:5.1f}%  width {np.mean(t_hi - t_lo):6.0f} MW"
             f"   by CDH regime {t_per}   <- SERVED (recalibrated daily, walk-forward)",
             f"        interval score (lower better): symmetric {is_s:6.1f}"
             f"   asymmetric {is_a:6.1f}   mondrian {is_d:6.1f}"
-            f"   trailing45 {is_t:6.1f}   adaptive+regime {is_r:6.1f}",
+            f"   trailing{TRAIL_DAYS} {is_t:6.1f}   adaptive+regime {is_r:6.1f}",
             f"      adaptive+regime {r_cov:5.1f}%  width {ar['test_width_mw']:6.0f} MW"
             f"   by CDH regime {ar['test_coverage_by_regime_pct']}"
             f"   <- CANDIDATE, NOT SERVED (hot regime under-covers)",

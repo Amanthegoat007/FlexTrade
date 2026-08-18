@@ -9,6 +9,44 @@ const pct = (v, d = 1) => (v == null ? "—" : `${Number(v).toFixed(d)}%`);
 const rs = (v) =>
   v == null ? "—" : `₹${Math.round(Number(v)).toLocaleString("en-IN")}`;
 
+
+/* Rolling-origin validation, rendered beside the forecast it validates.
+   These statistics lived only on the Methodology page, which is the one page a
+   sceptical reader reaches last. A coverage claim belongs next to the band it
+   describes, and a Diebold-Mariano result belongs next to the model it beats. */
+function WalkForward({ meta, match, children }) {
+  const wf = meta?.metrics?.walkforward;
+  const m = wf?.models?.find((x) => x.model.toLowerCase().includes(match));
+  if (!m) return null;
+  const dm = m.vs_benchmark;
+  return (
+    <Card title="Rolling-origin validation"
+      sub={`${m.origins_run} non-overlapping origins x ${m.test_days} days, ${m.window}, ${m.blocks?.toLocaleString("en-IN")} scored points. The model is refitted at every origin, so no test window sits inside its own training data.`}>
+      <div className="grid cols-3">
+        <Stat label="WAPE across origins" value={pct(m.wape_pct?.mean, 2)}
+          hint={`worst origin ${pct(m.wape_pct?.worst, 2)} · sd ${Number(m.wape_pct?.std ?? 0).toFixed(2)}`} />
+        <Stat label="MAE across origins"
+          value={m.mae?.mean != null ? Math.round(m.mae.mean).toLocaleString("en-IN") : "—"}
+          unit={m.unit} hint={`worst origin ${Math.round(m.mae?.worst ?? 0).toLocaleString("en-IN")} ${m.unit}`} />
+        {dm ? (
+          <Stat label="Diebold-Mariano vs baseline"
+            value={`t = ${Number(dm.stat).toFixed(2)}`}
+            hint={dm.p_value === 0 ? "p < 0.001 — the win is not luck" : `p = ${dm.p_value}`} />
+        ) : (
+          <Stat label="Interval score"
+            value={m.interval_score_mean != null ? Math.round(m.interval_score_mean).toLocaleString("en-IN") : "—"}
+            hint="proper rule: width + miss penalty, lower is better" />
+        )}
+      </div>
+      {children}
+    </Card>
+  );
+}
+
+const bandWf = (meta) =>
+  meta?.metrics?.walkforward?.models?.find((m) =>
+    m.model.toLowerCase().includes("load band"));
+
 const TABS = [
   { id: "rtm", label: "RTM & Spread", icon: "⇄", hint: "intraday" },
   { id: "band", label: "Probabilistic Load", icon: "◍", hint: "P05–P95" },
@@ -18,6 +56,7 @@ const TABS = [
 
 export default function Forecasts() {
   const { data, loading, error } = useApi("/api/forecasts");
+  const { data: meta } = useApi("/api/meta");
   if (loading && !data) return <Loading error={error} />;
 
   const rtm = data?.rtm || {};
@@ -73,6 +112,8 @@ function RtmPanel({ rtm }) {
         <Stat label="Held-out window" value={`${intra.n_test?.toLocaleString("en-IN") || "—"}`}
           unit="blocks" hint={`${intra.test_from || "?"} → ${intra.test_to || "?"}`} />
       </div>
+
+      <WalkForward meta={meta} match="rtm" />
 
       <Card title="Every horizon, and what it must beat"
         sub="The three horizons have genuinely different information, so each is trained and scored separately. A champion is picked per horizon on the validation window; where the baseline wins we serve the baseline and say so.">
@@ -162,9 +203,33 @@ function BandPanel({ band }) {
       </div>
 
       {band.metrics_text && (
-        <Card title="Calibration report" sub="Raw vs symmetric vs asymmetric vs Mondrian vs trailing-window conformal, on the untouched test window. The served band recalibrates daily on a trailing 45 days.">
+        <>
+        <WalkForward meta={meta} match="load band">
+          <p className="muted" style={{ marginTop: 10 }}>
+            Coverage is the claim being sold, so it is tested rather than
+            asserted. Kupiec (1995) asks whether the miss RATE matches nominal;
+            Christoffersen (1998) asks whether the misses are independent or
+            arrive in clusters. Both verdicts are printed below, including where
+            they reject — a band that fails a test it never ran is worse than
+            one that fails a test it published.
+          </p>
+          <div className="grid cols-3" style={{ marginTop: 6 }}>
+            <Stat label="Coverage across origins"
+              value={pct(bandWf(meta)?.coverage_pct_mean, 1)}
+              hint={`worst origin ${pct(bandWf(meta)?.coverage_pct_worst, 1)} vs ${pct(bandWf(meta)?.nominal_pct, 0)} nominal`} />
+            <Stat label="Kupiec rejects"
+              value={`${bandWf(meta)?.kupiec_rejected_origins?.length ?? 0}/${bandWf(meta)?.origins_run ?? 0}`}
+              hint="origins where the miss rate differs from nominal" />
+            <Stat label="Christoffersen rejects"
+              value={`${bandWf(meta)?.independence_rejected_origins?.length ?? 0}/${bandWf(meta)?.origins_run ?? 0}`}
+              hint="origins where misses cluster rather than arrive independently" />
+          </div>
+        </WalkForward>
+
+        <Card title="Calibration report" sub="Raw vs symmetric vs asymmetric vs Mondrian vs trailing-window conformal, on the untouched test window. The served band recalibrates daily on a trailing 14 days — swept on the rolling-origin audit, where 14d beat 45d and the static margin on interval score, mean coverage and worst-origin coverage alike.">
           <pre className="code-block">{band.metrics_text}</pre>
         </Card>
+        </>
       )}
     </>
   );

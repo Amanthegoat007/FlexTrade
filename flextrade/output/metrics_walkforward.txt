@@ -1,6 +1,10 @@
-RTM intraday price (vs the hour-ratio incumbent)  —  5 rolling origins (30d each), 12,929 blocks, 2026-03-10 -> 2026-08-06
-  WAPE %   mean     25.473   worst     28.252   std     2.319
-  MAE      mean  1,057.772   worst  1,303.590   std   178.279
-  RMSE     mean  1,530.859   worst  1,796.414   std   189.184
-  bias     mean   -514.540   worst   -688.281   std   137.433
-  Diebold-Mariano vs benchmark: stat -12.671 p=0.0 -> A
+Delhi load band (P10-P90, trailing-window CQR)  —  8 rolling origins (30d each), 22,859 blocks, 2025-10-06 -> 2026-06-02
+  interval score 761.9 (proper; width + miss penalty, lower is better)
+  coverage 80.2% mean / 77.7% worst  vs 80.0% nominal   width 526.4
+  origins below nominal: 4/8
+  Kupiec REJECTS correct rate at: 2026-01-04, 2026-02-03, 2026-03-05, 2026-05-04
+  Christoffersen REJECTS independence (failures CLUSTER) at: 2025-10-06, 2025-11-05, 2025-12-05, 2026-01-04, 2026-02-03, 2026-03-05, 2026-04-04, 2026-05-04
+  WAPE %   mean      4.335   worst      5.510   std     0.881
+  MAE      mean    166.397   worst    208.210   std    39.860
+  RMSE     mean    225.683   worst    289.445   std    52.445
+  bias     mean    -69.280   worst   -143.461   std    74.861

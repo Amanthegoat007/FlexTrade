@@ -17,6 +17,8 @@ import warnings
 from pathlib import Path
 
 import lightgbm as lgb
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -82,15 +84,47 @@ def load_band_task(o: Origin) -> pd.DataFrame:
         pc[q] = m.predict(cal[lq.FEATURES])
         pt[q] = m.predict(te[lq.FEATURES])
 
-    # asymmetric CQR margins, the shipped construction
+    # Trailing-window CQR margins — the shipped construction as of 18 Aug 2026.
+    #
+    # Production used a single asymmetric margin fitted on the whole
+    # calibration block until today. That is now lo_static/hi_static and is NOT
+    # what gets served: the margin is re-read each day off the previous 45 days
+    # of realized residuals, because a block fitted months earlier is drawn
+    # from the wrong season. Reproduced here so the audit keeps scoring the
+    # shipped recipe rather than a retired one.
     yv = cal["load_mw"].values
-    n, alpha = len(yv), 0.2
+    yt_ = te["load_mw"].values
+    alpha = 0.2
+    cal_y = np.concatenate([yv, yt_])
+    cal_lo = np.concatenate([pc[0.10], pt[0.10]])
+    cal_hi = np.concatenate([pc[0.90], pt[0.90]])
+    trail_days = int(os.environ.get("FT_TRAIL_DAYS", str(lq.TRAIL_DAYS)))
+    cal_day = cal.index.append(te.index).normalize()
+    te_day = te.index.normalize()
+
+    # the retired static margin, kept only as the fallback for a thin trail
+    n = len(yv)
     side = min((1 - alpha / 2) * (1 + 1 / n), 1.0)
     m_lo = max(float(np.quantile(pc[0.10] - yv, side, method="higher")), 0.0)
     m_hi = max(float(np.quantile(yv - pc[0.90], side, method="higher")), 0.0)
 
-    return pd.DataFrame({"actual": te["load_mw"].values,
-                         "lo": pt[0.10] - m_lo, "hi": pt[0.90] + m_hi,
+    lo_out = pt[0.10].copy()
+    hi_out = pt[0.90].copy()
+    for d in sorted(set(te_day)):
+        today = te_day == d
+        trail = (cal_day < d) & (cal_day >= d - pd.Timedelta(days=trail_days))
+        if trail.sum() < 1000 or not today.any():
+            lo_out[today] -= m_lo
+            hi_out[today] += m_hi
+            continue
+        nt = int(trail.sum())
+        side_t = min((1 - alpha / 2) * (1 + 1 / nt), 1.0)
+        lo_out[today] -= max(float(np.quantile(
+            cal_lo[trail] - cal_y[trail], side_t, method="higher")), 0.0)
+        hi_out[today] += max(float(np.quantile(
+            cal_y[trail] - cal_hi[trail], side_t, method="higher")), 0.0)
+
+    return pd.DataFrame({"actual": yt_, "lo": lo_out, "hi": hi_out,
                          "mid": pt[0.50], "q10": pt[0.10], "q50": pt[0.50],
                          "q90": pt[0.90]}, index=te.index)
 
@@ -213,7 +247,7 @@ def rtm_incumbent_task(o: Origin) -> pd.DataFrame:
 
 SPECS = {
     "load_band": lambda: Spec(
-        name="Delhi load band (P10-P90, asymmetric CQR)",
+        name="Delhi load band (P10-P90, trailing-window CQR)",
         task=load_band_task, alpha=0.2, unit="MW",
         quantiles=(0.10, 0.50, 0.90)),
     "peak": lambda: Spec(

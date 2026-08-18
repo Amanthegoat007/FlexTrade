@@ -2,7 +2,7 @@
   "margins_mw": {
     "0.1-0.9": {
       "lo": 0.0,
-      "hi": 279.4,
+      "hi": 262.6,
       "symmetric": 123.7,
       "mondrian": {
         "cdh_edges": [
@@ -34,10 +34,10 @@
       },
       "lo_static": 91.1,
       "hi_static": 149.7,
-      "mode": "trailing45",
-      "trailing_days": 45,
-      "trailing_n": 4243,
-      "trailing_from": "2026-04-18",
+      "mode": "trailing14",
+      "trailing_days": 14,
+      "trailing_n": 1267,
+      "trailing_from": "2026-05-19",
       "trailing_to": "2026-06-02",
       "adaptive_regime": {
         "mode": "adaptive-regime",
@@ -48,50 +48,50 @@
           1000000000.0
         ],
         "global": {
-          "lo": 114.4,
-          "hi": 73.7
+          "lo": 0.0,
+          "hi": 110.8
         },
         "regimes": [
           {
             "lo_edge": -0.01,
             "hi_edge": 2.0,
-            "lo": 4.8,
-            "hi": 81.8,
-            "tail_lo": 0.1333,
-            "tail_hi": 0.0875,
+            "lo": 0.0,
+            "hi": 96.1,
+            "tail_lo": 0.1189,
+            "tail_hi": 0.1303,
             "blocks": 4972
           },
           {
             "lo_edge": 2.0,
             "hi_edge": 8.0,
-            "lo": 313.4,
-            "hi": 103.5,
-            "tail_lo": 0.0878,
-            "tail_hi": 0.0761,
+            "lo": 0.0,
+            "hi": 110.8,
+            "tail_lo": 0.1568,
+            "tail_hi": 0.0932,
             "blocks": 9289
           },
           {
             "lo_edge": 8.0,
             "hi_edge": 1000000000.0,
-            "lo": 114.4,
-            "hi": 73.7,
-            "tail_lo": 0.0836,
-            "tail_hi": 0.1559,
+            "lo": 0.0,
+            "hi": 110.8,
+            "tail_lo": 0.1618,
+            "tail_hi": 0.043,
             "blocks": 3264
           }
         ],
         "test_coverage_pct": 74.0,
         "test_coverage_by_regime_pct": [
-          74.8,
-          80.9,
-          63.7
+          76.4,
+          73.4,
+          66.3
         ],
-        "test_width_mw": 531.0
+        "test_width_mw": 466.0
       }
     },
     "0.05-0.95": {
       "lo": 0.0,
-      "hi": 324.7,
+      "hi": 357.6,
       "symmetric": 166.6,
       "mondrian": {
         "cdh_edges": [
@@ -123,10 +123,10 @@
       },
       "lo_static": 130.9,
       "hi_static": 202.2,
-      "mode": "trailing45",
-      "trailing_days": 45,
-      "trailing_n": 4243,
-      "trailing_from": "2026-04-18",
+      "mode": "trailing14",
+      "trailing_days": 14,
+      "trailing_n": 1267,
+      "trailing_from": "2026-05-19",
       "trailing_to": "2026-06-02",
       "adaptive_regime": {
         "mode": "adaptive-regime",
@@ -137,45 +137,45 @@
           1000000000.0
         ],
         "global": {
-          "lo": 235.6,
-          "hi": 79.0
+          "lo": 0.0,
+          "hi": 132.5
         },
         "regimes": [
           {
             "lo_edge": -0.01,
             "hi_edge": 2.0,
-            "lo": 125.9,
-            "hi": 124.1,
-            "tail_lo": 0.0589,
-            "tail_hi": 0.0292,
+            "lo": 0.0,
+            "hi": 138.4,
+            "tail_lo": 0.0444,
+            "tail_hi": 0.0484,
             "blocks": 4972
           },
           {
             "lo_edge": 2.0,
             "hi_edge": 8.0,
-            "lo": 505.8,
-            "hi": 62.3,
-            "tail_lo": 0.035,
-            "tail_hi": 0.0455,
+            "lo": 0.0,
+            "hi": 132.5,
+            "tail_lo": 0.0643,
+            "tail_hi": 0.061,
             "blocks": 9289
           },
           {
             "lo_edge": 8.0,
             "hi_edge": 1000000000.0,
-            "lo": 235.6,
-            "hi": 79.0,
-            "tail_lo": 0.0686,
-            "tail_hi": 0.1044,
+            "lo": 0.0,
+            "hi": 132.5,
+            "tail_lo": 0.0997,
+            "tail_hi": 0.022,
             "blocks": 3264
           }
         ],
-        "test_coverage_pct": 86.4,
+        "test_coverage_pct": 85.8,
         "test_coverage_by_regime_pct": [
-          91.5,
-          83.1,
-          72.2
+          89.0,
+          84.0,
+          76.5
         ],
-        "test_width_mw": 862.0
+        "test_width_mw": 677.0
       }
     }
   },
