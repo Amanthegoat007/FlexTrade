@@ -54,6 +54,18 @@ def realized() -> pd.DataFrame:
             j = plan["forecast_mcp"].to_frame().join(
                 actual_mcp.rename("actual"), how="inner").dropna()
             if len(j) >= 8:
+                # MAE leads, in rupees. On a target where 16.1% of blocks pin
+                # at the Rs 10,000 cap and 20.1% clear under Rs 2,000, a
+                # percentage error is dominated by the cheap blocks it matters
+                # least on: the same rupee miss reads 80% at the 5th
+                # percentile of price and 8% at the 85th. MAPE is still
+                # written so older receipts stay comparable, but it is not
+                # the number any surface should lead with.
+                row["price_mae_rs_mwh"] = round(float(
+                    (j["forecast_mcp"] - j["actual"]).abs().mean()), 1)
+                row["price_wape_pct"] = round(float(
+                    100 * (j["forecast_mcp"] - j["actual"]).abs().sum()
+                    / j["actual"].abs().sum()), 2)
                 row["price_mape_pct"] = round(float(
                     (np.abs(j["forecast_mcp"] - j["actual"])
                      / np.maximum(j["actual"], 100)).mean() * 100), 2)

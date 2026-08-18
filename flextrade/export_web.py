@@ -183,9 +183,17 @@ def _headline(metrics: dict) -> dict:
     out["load_test_r2"] = grab(lm, "test", "r2", r"R2\s+([\d.]+)")
 
     pm_ = metrics.get("price_model") or ""
-    out["price_test_mape_pct"] = grab(pm_, "test", "mape", r"MAPE\s+([\d.]+)%")
+    # MAE and WAPE lead. MAPE is still parsed so the older figure stays
+    # traceable, but it must not be the number a page puts in front of anyone:
+    # 16.1% of blocks pin at the Rs 10,000 cap and 20.1% clear under Rs 2,000,
+    # so the same rupee error reads 80% at the 5th percentile and 8% at the
+    # 85th. The metric mostly measures the window's price distribution.
+    out["price_test_mae_rs_mwh"] = grab(pm_, "test", "mae", r"MAE\s+([\d.]+)")
+    out["price_test_wape_pct"] = grab(pm_, "test", "wape", r"WAPE\s+([\d.]+)%")
     out["price_test_corr"] = grab(pm_, "test", "corr", r"corr\s+([\d.]+)")
-    out["price_test_evening_mape_pct"] = grab(pm_, "test", "ev", r"evening MAPE\s+([\d.]+)%")
+    out["price_test_evening_mae_rs_mwh"] = grab(
+        pm_, "test", "evmae", r"evening MAE\s+([\d.]+)")
+    out["price_test_mape_pct"] = grab(pm_, "test", "mape", r"\[MAPE\s+([\d.]+)%")
 
     bt = metrics.get("backtest_summary") or ""
     m = re.search(r"\((\d+) days\)", bt)

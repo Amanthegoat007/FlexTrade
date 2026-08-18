@@ -766,17 +766,28 @@ max  (1−λ)·E[profit] + λ·CVaR₉₀(profit)      CVaR via Rockafellar–Ur
         scored against what actually happened. A customer's yardstick, and one
         only a genuinely-running system can produce.
       </p>
+      <p>
+        Price is scored in <b>rupees</b>, not percent, and that is deliberate.
+        Over the last 365 days 16.1% of DAM blocks pinned at the ₹10,000 cap
+        and 20.1% cleared below ₹2,000, so one fixed ₹800/MWh error reads as
+        80% at the 5th percentile of price and 8% at the 85th. A percentage
+        error on this target scores hardest where the money is smallest, and
+        its level says more about the window's price distribution than about
+        the model. MAE is what a trading desk is exposed to; correlation is
+        what monetizes.
+      </p>
       {Array.isArray(m.realized_accuracy) && m.realized_accuracy.length > 0 && (
         <Card>
           <table className="data">
-            <thead><tr><th>Delivery day</th><th>Issued</th><th className="num">Load MAPE %</th><th className="num">Price MAPE %</th><th className="num">Price corr</th></tr></thead>
+            <thead><tr><th>Delivery day</th><th>Issued</th><th className="num">Load MAPE %</th><th className="num">Price MAE ₹/MWh</th><th className="num">Price WAPE %</th><th className="num">Price corr</th></tr></thead>
             <tbody>
               {m.realized_accuracy.map((r) => (
                 <tr key={r.delivery_day}>
                   <td><b>{r.delivery_day}</b></td>
                   <td style={{ color: "var(--muted)" }}>{r.issued}</td>
                   <td className="num">{r.load_mape_pct ?? "—"}</td>
-                  <td className="num">{r.price_mape_pct ?? "—"}</td>
+                  <td className="num">{r.price_mae_rs_mwh ?? "—"}</td>
+                  <td className="num">{r.price_wape_pct ?? "—"}</td>
                   <td className="num">{r.price_corr ?? "—"}</td>
                 </tr>
               ))}
@@ -787,7 +798,7 @@ max  (1−λ)·E[profit] + λ·CVaR₉₀(profit)      CVaR via Rockafellar–Ur
 
       <h2>Known limitations (say them before you're asked)</h2>
       <ul>
-        <li>Price MAPE ~20% (was ~23% before the cap-hurdle two-stage) — Indian DAM is violently volatile; shape (corr 0.93) is what monetizes, and 93.8% capture is the proof.</li>
+        <li>Price MAE ≈ ₹746/MWh on the held-out test window (WAPE 14.9%, corr 0.933). We previously quoted this as "MAPE ~20%", which overstated the error: with 16.1% of blocks at the cap and 20.1% under ₹2,000, MAPE is dominated by the cheap blocks it matters least on. Indian DAM is genuinely volatile; shape is what monetizes, and 93.8% capture is the proof.</li>
         <li>RE plant is a digital twin, not plant telemetry — standard pre-integration practice; the forecast error is still real NWP error.</li>
         <li>DSM engine follows the CERC 2024 <i>structure</i> with cited provenance per rule; final gazetted slabs and SERC variants need counsel review before real settlement.</li>
         <li>Ancillary-services prices have no public feed (NLDC-internal) — the NR's third component is proxied by RTM and flagged in every result.</li>

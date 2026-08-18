@@ -46,6 +46,27 @@ FEATURES = [
     # a 12:00 gate on D-1 for delivery D the newest report we can hold is
     # around D-3. Coal stock moves slowly enough that the lag costs little.
     "coal_days_of_stock", "coal_critical_pct", "coal_stock_trend_7d",
+    # --- outages: MEASURED AND NOT ADOPTED, 18 Aug 2026 ---
+    # National outage MW correlates -0.466 with the share of blocks pinning at
+    # the cap, and -0.321 after deseasonalising against two Fourier harmonics
+    # of day-of-year, so the association is real and not the calendar in
+    # disguise. The sign is the opposite of the naive reading because outages
+    # are endogenous: operators schedule maintenance into slack, so a large
+    # parked fleet signals expected thin margins rather than scarcity. April
+    # averages 13,903 MW out at a 0.308 cap share; November 32,874 MW at 0.063.
+    #
+    # None of which earned a place. Retrained at 6 rolling origins, 30-day test
+    # windows, both stages refit per origin so no test window sat inside
+    # training data:
+    #
+    #     MAE   base 766.9 -> 796.0   +3.80% WORSE   outage wins 3/6
+    #     WAPE  base 16.21 ->  16.84  +3.89% WORSE   paired t -1.21
+    #
+    # A true association that adds nothing once the calendar, coal position and
+    # price lags are already in the model. The columns are still built in
+    # _table() because the State Stress index may want them; they stay out of
+    # FEATURES until something measures better. Do not re-add on the strength
+    # of the correlation alone — that is what was tested here.
 ]
 
 
@@ -87,6 +108,22 @@ def _table() -> pd.DataFrame:
                 df[dst] = pd.Series(day.map(c[src]), index=df.index).ffill()
     except Exception as e:
         print(f"  (coal features unavailable: {type(e).__name__}: {str(e)[:70]})")
+
+    # --- outage position, same daily-to-block broadcast as coal ---
+    try:
+        from ingest import outages
+        o = outages.daily_summary(1200)
+        if len(o):
+            o = o.set_index("day")[["total_out_mw", "forced_mw"]].sort_index()
+            o["trend"] = o["total_out_mw"].diff(7)
+            o = o.shift(3, freq="D")
+            day = df.index.normalize()
+            for src, dst in (("total_out_mw", "outage_total_mw"),
+                             ("forced_mw", "outage_forced_mw"),
+                             ("trend", "outage_trend_7d")):
+                df[dst] = pd.Series(day.map(o[src]), index=df.index).ffill()
+    except Exception as e:
+        print(f"  (outage features unavailable: {type(e).__name__}: {str(e)[:70]})")
     return df
 
 
@@ -188,19 +225,31 @@ def train(test_days: int = 60):
         pbelow = np.clip(np.exp(model.predict(part[FEATURES])), 0, CAP)
         return pcap * CAP + (1 - pcap) * pbelow
 
-    lines = []
+    lines_ = []
     for name, part in [("train", train_), ("val", val), ("test", test)]:
         p = hurdle_predict(part)
         y = part["mcp_rs_mwh"].values
+        mae = float(np.mean(np.abs(y - p)))
+        wape = 100 * float(np.sum(np.abs(y - p)) / np.sum(np.abs(y)))
         mape = np.mean(np.abs(y - p) / np.maximum(y, 100)) * 100
         rmse = float(np.sqrt(np.mean((y - p) ** 2)))
         corr = np.corrcoef(y, p)[0, 1]
         evening = (part.index.hour >= 17) & (part.index.hour <= 23)
-        emape = np.mean(np.abs(y[evening] - p[evening])
-                        / np.maximum(y[evening], 100)) * 100
-        lines.append(f"{name:5s}  MAPE {mape:5.2f}%   RMSE {rmse:7.1f} Rs/MWh"
-                     f"   corr {corr:.3f}   evening MAPE {emape:5.2f}%")
-    report = "cap-hurdle two-stage (P(cap) x below-cap regression)\n" + "\n".join(lines)
+        emae = float(np.mean(np.abs(y[evening] - p[evening])))
+        lines_.append(f"{name:5s}  MAE {mae:7.1f} Rs/MWh   WAPE {wape:5.2f}%"
+                      f"   RMSE {rmse:7.1f}   corr {corr:.3f}"
+                      f"   evening MAE {emae:7.1f}   [MAPE {mape:5.2f}%]")
+    # MAE is the headline and MAPE is bracketed, because MAPE is close to
+    # meaningless on this target and is kept only for continuity with older
+    # reports. Over the last 365 days 20.1% of blocks cleared below Rs 2,000
+    # and 16.1% pinned exactly at the Rs 10,000 cap, so one fixed Rs 800/MWh
+    # error reads as 80% APE at the 5th percentile and 8% at the 85th. It
+    # scores hardest where the rupees are smallest, and its level says more
+    # about the price distribution in the window than about the model.
+    header = ("cap-hurdle two-stage (P(cap) x below-cap regression)"
+              "   [MAPE shown in brackets: unreliable on a capped, near-zero"
+              "-floored target - see MAE]")
+    report = header + chr(10) + chr(10).join(lines_)
     print(report)
     (OUT / "metrics_price.txt").write_text(report)
     return model
