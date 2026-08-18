@@ -193,10 +193,49 @@ def get_gdam_today():
                  "error": str(e)})
 
 
+HPDAM_BASE = ("https://www.iexindia.com/market-data/"
+              "high-price-day-ahead-market/market-snapshot")
+
+
+def fetch_hpdam(d: date | None = None) -> pd.DataFrame:
+    """High Price DAM — where scarcity trades once DAM censors at Rs 10,000.
+
+    HP-DAM is a separate segment with a higher ceiling, and it only clears when
+    ordinary DAM has run out of supply. That makes it the one public series that
+    says how far ABOVE the cap the market actually was, which is exactly the
+    information the censored-mixture price model cannot see by construction: it
+    models the cap as an atom and has no way to know whether a capped block was
+    marginally short or catastrophically short.
+
+    Measured on the three days in our own store where 100% of DAM blocks pinned
+    at the cap, HP-DAM cleared all 96 blocks each time:
+
+        2023-09-01   MCP max Rs 18,501/MWh   mean purchase bid   642 MW
+        2023-09-03   MCP max Rs 16,999/MWh   mean purchase bid    60 MW
+        2023-10-10   MCP max Rs 15,001/MWh   mean purchase bid 1,194 MW
+
+    On an ordinary day it clears nothing and MCP comes back as "-", which
+    _parse() already turns into NaN. That asymmetry is the signal, not a gap:
+    purchase bid volume here is unmet demand at the DAM ceiling.
+
+    Same schema and same date parameters as DAM, so it reuses _parse().
+    """
+    if d is None:
+        params = {"interval": "ONE_FOURTH_HOUR", "dp": "TODAY"}
+    else:
+        ds = f"{d:%d-%m-%Y}"
+        params = {"interval": "ONE_FOURTH_HOUR", "dp": "SELECT_RANGE",
+                  "fromDate": ds, "toDate": ds}
+    r = requests.get(HPDAM_BASE, params=params, headers=UA, timeout=40)
+    r.raise_for_status()
+    return _parse(r.text)
+
+
 # every IEX market is backfillable the same way: its fetcher takes a
 # delivery date and the site serves that day's cleared table
 MARKETS = {
     "dam": ("dam_price", lambda d: fetch_dam(d)),
+    "hpdam": ("hpdam_price", lambda d: fetch_hpdam(d)),
     "rtm": ("rtm_price", lambda d: fetch_rtm(d)),
     "gdam": ("gdam_price", lambda d: fetch_gdam(d)),
 }
