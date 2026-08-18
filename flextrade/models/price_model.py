@@ -166,6 +166,30 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     return f
 
 
+# Features the model cannot run without. Everything in FEATURES minus these is
+# OPTIONAL, and that distinction is worth 16% of this model's error.
+#
+# The coal block only exists from 2025-06-12 — NPP serves no daily coal report
+# before that, verified by fetching 2023-06-15 and 2024-03-10 and getting zero
+# rows back. Meanwhile IEX serves DAM history to 2022. Listing coal in the
+# dropna subset therefore silently discarded every block before mid-2025:
+# 106,944 of 147,840 rows, 72% of the price history, including four of the five
+# summers where cap events actually happen.
+#
+# LightGBM handles NaN natively — it learns a default split direction for
+# missing values — so a feature that is absent for part of the history costs
+# nothing except where it is genuinely informative. Measured on 6 rolling
+# origins, both hurdle stages refit per origin:
+#
+#     MAE   777.2 -> 654.0   -15.85%   wide wins 6/6
+#     WAPE  16.25 -> 13.62   -16.21%   paired t 3.650
+#
+# The general rule, and this is the second time it has cost us: never dropna on
+# a feature that is merely helpful. Drop rows only for what the model requires.
+OPTIONAL_FEATURES = ["coal_days_of_stock", "coal_critical_pct",
+                     "coal_stock_trend_7d"]
+REQUIRED_FEATURES = [c for c in FEATURES if c not in OPTIONAL_FEATURES]
+
 CAP = 10000.0
 CAP_CLF_PATH = OUT / "price_cap_clf.txt"
 
@@ -185,7 +209,7 @@ def train(test_days: int = 60):
     On the held-out 60 days this cut evening MAPE from 15.3% -> 11.4% and
     lifted cap-block recall from 49% -> 78% vs the single-stage model.
     """
-    f = build_features(_table()).dropna(subset=FEATURES + ["mcp_rs_mwh"])
+    f = build_features(_table()).dropna(subset=REQUIRED_FEATURES + ["mcp_rs_mwh"])
     split = f.index.max().normalize() - pd.Timedelta(days=test_days)
     val_split = split - pd.Timedelta(days=30)
     train_ = f[f.index < val_split]
@@ -436,7 +460,7 @@ def calibrate_conformal(test: pd.DataFrame, qlo: float = 0.10, qhi: float = 0.90
     state file cannot silently mis-price a band.
     """
     lines = report_lines if report_lines is not None else []
-    f = build_features(_table()).dropna(subset=FEATURES + ["mcp_rs_mwh"])
+    f = build_features(_table()).dropna(subset=REQUIRED_FEATURES + ["mcp_rs_mwh"])
 
     # Calibrate the SAME object that gets served: the censored mixture, not the
     # bare heads. Calibrating one construction and serving another is how the
@@ -637,7 +661,7 @@ def train_quantiles(test_days: int = 60, quantiles=QUANTILES):
     plus PIT: the share of actual prices at or below each served quantile,
     which sits on the nominal level if the forecast is calibrated.
     """
-    f = build_features(_table()).dropna(subset=FEATURES + ["mcp_rs_mwh"])
+    f = build_features(_table()).dropna(subset=REQUIRED_FEATURES + ["mcp_rs_mwh"])
     split = f.index.max().normalize() - pd.Timedelta(days=test_days)
     val_split = split - pd.Timedelta(days=30)
     train_ = f[f.index < val_split]
