@@ -422,11 +422,13 @@ export default function Methodology() {
       <h3>Two results we published against ourselves</h3>
       <ul>
         <li>
-          <b>The day-ahead RTM model loses to persistence on the level.</b>{" "}
-          Persistence is therefore the champion at that horizon and the
-          leaderboard says so. The model is clearly better at calling the
-          spread's direction (73.4% vs 63.8%), but only the intraday model —
-          which wins on both — is promoted into the optimizer.
+          <b>The day-ahead RTM model used to lose to persistence on the
+          level, and we published that.</b>{" "} It no longer does: on 38
+          months of RTM history rather than 12.7, day-ahead scores 29.89% WAPE
+          against persistence at 31.29% (it was 33.9% vs 33.2%, losing), and
+          all three horizons now promote the model. Worth being precise about
+          what changed — the algorithm did not. The history did. We had been
+          training on a third of the RTM data IEX serves.
         </li>
         <li>
           <b>Conformal calibration is asymmetric because the median
@@ -804,7 +806,7 @@ max  (1−λ)·E[profit] + λ·CVaR₉₀(profit)      CVaR via Rockafellar–Ur
         <li>Ancillary-services prices have no public feed (NLDC-internal) — the NR's third component is proxied by RTM and flagged in every result.</li>
         <li>Annualising a summer backtest window overweights cap-price evenings — quote the walk-forward window's own number as the hard result. Measured across the full year, mean daily DAM spread is ₹7,771 vs ₹8,785 in the backtest window, so the annualised figure is ~12% optimistic; ~₹8.5 Cr/yr is the defensible number.</li>
         <li><b>Cycling is now priced, not capped — fixed 2 Aug 2026.</b> The LP previously charged a ₹200/MWh throughput cost that was ~4× below our own physics model, so it over-traded and the headline revenue was partly paid for in warranty. It now charges the calibrated ₹800/MWh and self-regulates to 412 EFC/yr, inside the 365–550 envelope. Cost of the correction: annualised revenue ₹9.61 Cr → ₹8.23 Cr. There is still no hard cycle cap, and deliberately so — see the section above.</li>
-        <li>The day-ahead RTM model loses to persistence on the level (33.9% vs 33.2% WAPE) and is not served there — only the intraday model is promoted. It wins on spread direction at both horizons.</li>
+        <li>Same-day RTM is still marginally worse than the DAM-ratio incumbent on the LEVEL (29.18% vs 28.81% WAPE) while being far better on spread DIRECTION (68.6% vs 48.1%). It is promoted because direction is what the optimizer trades on, but the level loss is real and stated rather than averaged away. Day-ahead now beats persistence on both (29.89% vs 31.29% WAPE, 67.4% vs 61.8% direction) after the RTM history was backfilled from 12.7 to 38 months.</li>
         <li>The DSM exposure forecast prices a scheduled generator, not a DISCOM's drawal book: our settlement engine implements the general-seller band, and we could not verify a buyer profile's slabs. No "optimal schedule bias" is offered — the optimum sits at the edge of the sweep because the engine lacks the over-injection caps the real regulation carries, so any optimum would be an artifact of a missing rule rather than a real saving.</li>
         <li>There is <b>no realised RE generation data at all</b> — <span className="mono">re_weather</span> is forecast-only — so an RE developer's plant-level DSM exposure, the case with the strongest commercial pull, is not priced. An invented error distribution quoted in rupees would be worse than no feature.</li>
         <li>SLDC/IEX access is scraping, not contracted feeds — exactly the partnership the business model names (§9); adapters are pluggable for the day feeds are licensed.</li>
