@@ -162,7 +162,7 @@ function BandPanel({ band }) {
       </div>
 
       {band.metrics_text && (
-        <Card title="Calibration report" sub="Raw vs symmetric vs asymmetric conformal, on the untouched test window.">
+        <Card title="Calibration report" sub="Raw vs symmetric vs asymmetric vs Mondrian vs trailing-window conformal, on the untouched test window. The served band recalibrates daily on a trailing 45 days.">
           <pre className="code-block">{band.metrics_text}</pre>
         </Card>
       )}

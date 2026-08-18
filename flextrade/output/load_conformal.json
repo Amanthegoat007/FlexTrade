@@ -1,9 +1,44 @@
 {
   "margins_mw": {
     "0.1-0.9": {
-      "lo": 91.1,
-      "hi": 149.7,
+      "lo": 0.0,
+      "hi": 279.4,
       "symmetric": 123.7,
+      "mondrian": {
+        "cdh_edges": [
+          -0.01,
+          2.0,
+          8.0,
+          1000000000.0
+        ],
+        "regimes": [
+          {
+            "lo": 107.7,
+            "hi": 51.2,
+            "n": 4972,
+            "fallback": false
+          },
+          {
+            "lo": 103.1,
+            "hi": 128.7,
+            "n": 9289,
+            "fallback": false
+          },
+          {
+            "lo": 0.0,
+            "hi": 476.0,
+            "n": 3264,
+            "fallback": false
+          }
+        ]
+      },
+      "lo_static": 91.1,
+      "hi_static": 149.7,
+      "mode": "trailing45",
+      "trailing_days": 45,
+      "trailing_n": 4243,
+      "trailing_from": "2026-04-18",
+      "trailing_to": "2026-06-02",
       "adaptive_regime": {
         "mode": "adaptive-regime",
         "cdh_edges": [
@@ -55,9 +90,44 @@
       }
     },
     "0.05-0.95": {
-      "lo": 130.9,
-      "hi": 202.2,
+      "lo": 0.0,
+      "hi": 324.7,
       "symmetric": 166.6,
+      "mondrian": {
+        "cdh_edges": [
+          -0.01,
+          2.0,
+          8.0,
+          1000000000.0
+        ],
+        "regimes": [
+          {
+            "lo": 159.9,
+            "hi": 69.6,
+            "n": 4972,
+            "fallback": false
+          },
+          {
+            "lo": 141.5,
+            "hi": 128.5,
+            "n": 9289,
+            "fallback": false
+          },
+          {
+            "lo": 1.4,
+            "hi": 619.5,
+            "n": 3264,
+            "fallback": false
+          }
+        ]
+      },
+      "lo_static": 130.9,
+      "hi_static": 202.2,
+      "mode": "trailing45",
+      "trailing_days": 45,
+      "trailing_n": 4243,
+      "trailing_from": "2026-04-18",
+      "trailing_to": "2026-06-02",
       "adaptive_regime": {
         "mode": "adaptive-regime",
         "cdh_edges": [

@@ -30,7 +30,7 @@ const kpiGlossary = (h = {}) => [
   ["Coverage", "% of actual outcomes falling inside the predicted band — measured walk-forward (recalibrate each day, score the next), never on a single window. A calibrated P10–P90 band should cover ~80%, and it should do so inside every regime, not just on average.",
     `Price band ${n(h.price_band_coverage_pct, 1)}% vs ${h.price_band_target_pct ?? 80}% nominal over ${h.price_band_walk_days ?? "—"} days, at ${
       h.price_band_width_rs_mwh ? `₹${Number(h.price_band_width_rs_mwh).toLocaleString("en-IN")}/MWh` : "—"
-    } wide — worst rolling 30 days ${n(h.price_band_worst_30d_pct, 1)}%, worst cap-regime ${n(h.price_band_worst_regime_pct, 1)}%. Delhi load band: 84.2% at 605 MW.`],
+    } wide — worst rolling 30 days ${n(h.price_band_worst_30d_pct, 1)}%, worst cap-regime ${n(h.price_band_worst_regime_pct, 1)}%. Delhi load band: 78.7% at 528 MW, walk-forward with the margin recalibrated daily on a trailing 45 days.`],
   ["Capture ratio", "Backtest P&L ÷ perfect-foresight P&L — the single best summary of forecast + optimizer quality together.",
     `${n(h.capture_ratio_pct, 1)}% with the cap-hurdle point model (${h.backtest_days ?? "—"}-day walk-forward).`],
   ["Uplift", "FlexTrade P&L − customer's baseline (static EMS) P&L. This is the revenue-share billing base (business model §3.4).",
@@ -371,7 +371,7 @@ export default function Methodology() {
                 <span className="mono">P05–P95, conformal</span></td>
               <td>How wide a schedule band must be — DSM charges you for leaving
                 a band, not for missing an average</td>
-              <td className="num"><b>84.2%</b> coverage<br />605 MW wide</td>
+              <td className="num"><b>78.7%</b> coverage<br />528 MW wide</td>
               <td className="num">55.6% raw<br />(nominal 80%)</td>
             </tr>
             <tr>

@@ -266,11 +266,138 @@ def train(quantiles=QUANTILES) -> str:
         m_lo, m_hi = max(m_lo, 0.0), max(m_hi, 0.0)
         margins[f"{lo_q}-{hi_q}"] = {"lo": m_lo, "hi": m_hi, "symmetric": sym}
 
+        # --- Mondrian CQR (Vovk 2003): the same asymmetric margin, taken
+        # WITHIN each regime instead of once across all of them.
+        #
+        # One global margin assumes the residual scale is the same on a mild
+        # day and a 40C one, and it is not: measured on this test window the
+        # global asymmetric band covers 88.2% of mild blocks and 72.5% of hot
+        # ones against a nominal 80%. The average looked fine at 84.2% and hid
+        # a regime that is 7.5 points short — on the days a DISCOM actually
+        # needs the band.
+        #
+        # This is NOT the adaptive-regime candidate that was rejected below.
+        # That one pushed each regime's tail LEVEL around with an ACI update
+        # and then froze whatever level the last calibration day happened to
+        # land on; the levels drifted, the frozen ones did not transfer, and
+        # its hot regime came out worse (63.7%) than the global margin it was
+        # meant to repair. Here the level is fixed at nominal and only the
+        # QUANTILE is taken per regime — no state, no drift, nothing to go
+        # stale. The finite-sample (1 + 1/n) correction uses each regime's own
+        # n, and a regime thinner than REGIME_MIN_N falls back to the global
+        # margin rather than trusting a quantile of a handful of points.
+        vreg = regime_of(val["cdh"].values)
+        s_lo_all, s_hi_all = val_pred[lo_q] - yv, yv - val_pred[hi_q]
+        mond = []
+        for b in range(len(CDH_EDGES) - 1):
+            mb = vreg == b
+            nb_ = int(mb.sum())
+            if nb_ < REGIME_MIN_N:
+                mond.append({"lo": m_lo, "hi": m_hi, "n": nb_, "fallback": True})
+                continue
+            side_b = min((1 - alpha / 2) * (1 + 1 / nb_), 1.0)
+            mond.append({
+                "lo": max(float(np.quantile(s_lo_all[mb], side_b, method="higher")), 0.0),
+                "hi": max(float(np.quantile(s_hi_all[mb], side_b, method="higher")), 0.0),
+                "n": nb_, "fallback": False})
+        margins[f"{lo_q}-{hi_q}"]["mondrian"] = {
+            "cdh_edges": list(CDH_EDGES),
+            "regimes": [{k: (round(v, 1) if isinstance(v, float) else v)
+                         for k, v in r.items()} for r in mond]}
+
         lo, hi = test_pred[lo_q], test_pred[hi_q]
         raw = float(np.mean((yt >= lo) & (yt <= hi)) * 100)
         s_cov = float(np.mean((yt >= lo - sym) & (yt <= hi + sym)) * 100)
         a_lo, a_hi = lo - m_lo, hi + m_hi
         a_cov = float(np.mean((yt >= a_lo) & (yt <= a_hi)) * 100)
+
+        # Mondrian scored on the SAME test window as everything else
+        treg0 = regime_of(test["cdh"].values)
+        d_lo, d_hi = lo.copy(), hi.copy()
+        for b, spec in enumerate(mond):
+            mb = treg0 == b
+            if mb.any():
+                d_lo[mb] -= spec["lo"]
+                d_hi[mb] += spec["hi"]
+        d_cov = float(np.mean((yt >= d_lo) & (yt <= d_hi)) * 100)
+        d_per = [round(float(np.mean((yt[treg0 == b] >= d_lo[treg0 == b])
+                                     & (yt[treg0 == b] <= d_hi[treg0 == b])) * 100), 1)
+                 if (treg0 == b).sum() >= 100 else None
+                 for b in range(len(CDH_EDGES) - 1)]
+
+        # --- trailing recalibration, scored walk-forward -------------------
+        #
+        # Both regime-conditional attempts failed for one structural reason:
+        # the calibration block and the test window do not contain the same
+        # seasons. Measured on this split, validation is 28/53/19 percent
+        # mild/warm/hot and test is 63/19/18 — and validation's "hot" blocks
+        # are monsoon-adjacent Jun-Sep 2025 while test's are peak-summer
+        # Apr-Jun 2026. Those are different physical regimes at the same CDH,
+        # so a margin fitted on one cannot size a band on the other, however
+        # the bins are drawn.
+        #
+        # The price band already solved this by recalibrating on a trailing
+        # window instead of a fixed block. Same idea here: at each day of the
+        # test window the margin is read off the previous 45 days of realized
+        # residuals, which are always recent and always the current season.
+        # Scored walk-forward, so no margin ever sees the day it sizes.
+        cal_y = np.concatenate([yv, yt])
+        cal_lo = np.concatenate([val_pred[lo_q], test_pred[lo_q]])
+        cal_hi = np.concatenate([val_pred[hi_q], test_pred[hi_q]])
+        cal_idx = val.index.append(test.index)
+        cal_day = cal_idx.normalize()
+        t_lo, t_hi = lo.copy(), hi.copy()
+        test_day = test.index.normalize()
+        for d in sorted(set(test_day)):
+            trail = (cal_day < d) & (cal_day >= d - pd.Timedelta(days=45))
+            today = test_day == d
+            if trail.sum() < 1000 or not today.any():
+                t_lo[today] -= m_lo
+                t_hi[today] += m_hi
+                continue
+            nt = int(trail.sum())
+            side_t = min((1 - alpha / 2) * (1 + 1 / nt), 1.0)
+            tl = max(float(np.quantile(cal_lo[trail] - cal_y[trail], side_t,
+                                       method="higher")), 0.0)
+            th = max(float(np.quantile(cal_y[trail] - cal_hi[trail], side_t,
+                                       method="higher")), 0.0)
+            t_lo[today] -= tl
+            t_hi[today] += th
+        t_cov = float(np.mean((yt >= t_lo) & (yt <= t_hi)) * 100)
+        if (lo_q, hi_q) == BANDS[0]:
+            served_lo, served_hi = t_lo.copy(), t_hi.copy()
+
+        # ADOPTED. forecast_day() reads margins_mw[band]["lo"/"hi"], so the
+        # served band switches by writing the trailing margin into those keys
+        # — computed here from the most recent 45 days available, which is
+        # what "trailing" means on the day the model is retrained. The daily
+        # pipeline retrains, so serving reproduces the walk-forward behaviour
+        # scored above rather than approximating it.
+        #
+        # The static asymmetric margins are kept beside them under
+        # lo_static/hi_static: they are what every report before 18 Aug 2026
+        # was measured against, and dropping them would make the change
+        # untraceable.
+        last = cal_day.max()
+        fin = (cal_day > last - pd.Timedelta(days=45))
+        if fin.sum() >= 1000:
+            nf = int(fin.sum())
+            side_f = min((1 - alpha / 2) * (1 + 1 / nf), 1.0)
+            f_lo = max(float(np.quantile(cal_lo[fin] - cal_y[fin], side_f,
+                                         method="higher")), 0.0)
+            f_hi = max(float(np.quantile(cal_y[fin] - cal_hi[fin], side_f,
+                                         method="higher")), 0.0)
+            margins[f"{lo_q}-{hi_q}"].update({
+                "lo": f_lo, "hi": f_hi,
+                "lo_static": m_lo, "hi_static": m_hi,
+                "mode": "trailing45",
+                "trailing_days": 45, "trailing_n": nf,
+                "trailing_from": str((last - pd.Timedelta(days=45)).date()),
+                "trailing_to": str(last.date())})
+        t_per = [round(float(np.mean((yt[treg0 == b] >= t_lo[treg0 == b])
+                                     & (yt[treg0 == b] <= t_hi[treg0 == b])) * 100), 1)
+                 if (treg0 == b).sum() >= 100 else None
+                 for b in range(len(CDH_EDGES) - 1)]
 
         # --- adaptive regime-conditional, scored on the SAME test window ---
         ar = _adaptive_regime_margins(val, val_pred, lo_q, hi_q)
@@ -292,13 +419,54 @@ def train(quantiles=QUANTILES) -> str:
         ar["test_coverage_pct"] = round(r_cov, 1)
         ar["test_coverage_by_regime_pct"] = per
         ar["test_width_mw"] = round(float(np.mean(r_hi - r_lo)), 0)
+        # Conditional coverage for the band we ACTUALLY SERVE. A marginal
+        # number can be perfect while a regime the customer cares about is
+        # badly short — the candidate below was rejected for exactly that, and
+        # until now the served band was never held to the same test.
+        a_per, a_n = [], []
+        for b in range(len(CDH_EDGES) - 1):
+            m = treg == b
+            a_n.append(int(m.sum()))
+            a_per.append(round(float(np.mean((yt[m] >= a_lo[m])
+                                             & (yt[m] <= a_hi[m])) * 100), 1)
+                         if m.sum() >= 100 else None)
+
+        # Interval score (Gneiting & Raftery 2007, eq. 43): width plus a
+        # 2/alpha penalty per unit of miss. Lower is better. This is the
+        # proper rule for adjudicating band vs band, because coverage alone
+        # always rewards the wider one and width alone always rewards the
+        # narrower.
+        def interval_score(l, h, y, alpha):
+            return float(np.mean((h - l)
+                                 + (2 / alpha) * (l - y) * (y < l)
+                                 + (2 / alpha) * (y - h) * (y > h)))
+        alpha_ = 1 - (hi_q - lo_q)
+        is_a = interval_score(a_lo, a_hi, yt, alpha_)
+        is_r = interval_score(r_lo, r_hi, yt, alpha_)
+        is_s = interval_score(lo - sym, hi + sym, yt, alpha_)
+        is_d = interval_score(d_lo, d_hi, yt, alpha_)
+        is_t = interval_score(t_lo, t_hi, yt, alpha_)
+
         lines += [
             f"  P{lo_q * 100:02.0f}-P{hi_q * 100:02.0f} (nominal {nominal:.0f}%)",
             f"      raw         {raw:5.1f}%  width {np.mean(hi - lo):6.0f} MW",
             f"      symmetric   {s_cov:5.1f}%  width "
             f"{np.mean(hi + sym - lo + sym):6.0f} MW  [+/-{sym:.0f} MW]",
             f"      asymmetric  {a_cov:5.1f}%  width {np.mean(a_hi - a_lo):6.0f} MW"
-            f"  [-{m_lo:.0f} / +{m_hi:.0f} MW]  <- served",
+            f"  [-{m_lo:.0f} / +{m_hi:.0f} MW]  <- previous default",
+            f"        by CDH regime {a_per}   n {a_n}",
+            f"      mondrian    {d_cov:5.1f}%  width {np.mean(d_hi - d_lo):6.0f} MW"
+            f"   by CDH regime {d_per}",
+            f"        margins per regime (MW): "
+            + "  ".join(f"[{CDH_EDGES[b]:.0f}-{CDH_EDGES[b+1]:.0f}h] "
+                        f"-{g['lo']:.0f}/+{g['hi']:.0f}"
+                        + ("*" if g["fallback"] else "")
+                        for b, g in enumerate(mond)),
+            f"      trailing45  {t_cov:5.1f}%  width {np.mean(t_hi - t_lo):6.0f} MW"
+            f"   by CDH regime {t_per}   <- SERVED (recalibrated daily, walk-forward)",
+            f"        interval score (lower better): symmetric {is_s:6.1f}"
+            f"   asymmetric {is_a:6.1f}   mondrian {is_d:6.1f}"
+            f"   trailing45 {is_t:6.1f}   adaptive+regime {is_r:6.1f}",
             f"      adaptive+regime {r_cov:5.1f}%  width {ar['test_width_mw']:6.0f} MW"
             f"   by CDH regime {ar['test_coverage_by_regime_pct']}"
             f"   <- CANDIDATE, NOT SERVED (hot regime under-covers)",
@@ -309,9 +477,18 @@ def train(quantiles=QUANTILES) -> str:
 
     # ---- what the band means operationally ------------------------------
     lo_q, hi_q = BANDS[0]
-    m = margins.get(f"{lo_q}-{hi_q}", {"lo": 0.0, "hi": 0.0})
-    lo_c = test_pred[lo_q] - m["lo"]
-    hi_c = test_pred[hi_q] + m["hi"]
+    # Use the WALK-FORWARD band, not today's frozen margin applied backwards.
+    # The margin now tracks the season: the one standing at the end of the
+    # window is sized for peak summer, and painting that across a year of
+    # winter blocks reports a band 22% wider than the one a customer would
+    # ever have been served. The walk-forward series is what was scored above
+    # and what serving reproduces, so it is what gets described here.
+    if "served_lo" in dir():
+        lo_c, hi_c = served_lo, served_hi
+    else:
+        m = margins.get(f"{lo_q}-{hi_q}", {"lo": 0.0, "hi": 0.0})
+        lo_c = test_pred[lo_q] - m["lo"]
+        hi_c = test_pred[hi_q] + m["hi"]
     width_pct = float(np.mean((hi_c - lo_c) / yt) * 100)
     p50 = test_pred[0.50]
     inside_dsm = float(np.mean(np.abs(yt - p50) / yt * 100 <= DSM_BAND_PCT) * 100)
