@@ -265,6 +265,30 @@ def pstcl() -> int:
     raise last
 
 
+def _npp_due(source: str, max_age_min: int = 90) -> bool:
+    """True when the newest stored row for `source` is older than max_age_min.
+
+    NPP serves a rolling ~4.1 hour window, so a poll only needs to land inside
+    that window to lose nothing. Reading back what is already stored makes the
+    cadence self-regulating: no env var, no tick counter, and a run that starts
+    right after another one still does not re-fetch.
+    """
+    path = OUT / f"{source}-{datetime.now(timezone.utc):%Y-%m}.csv"
+    if not path.exists():
+        return True
+    newest = ""
+    with path.open(newline="", encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            ts = row.get("ts_utc", "")
+            if ts > newest:
+                newest = ts
+    if not newest:
+        return True
+    age = datetime.now(timezone.utc) - datetime.strptime(
+        newest, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    return age.total_seconds() > max_age_min * 60
+
+
 NPP_DASH = "https://npp.gov.in/dashBoard/"
 
 
@@ -285,22 +309,24 @@ def npp_national() -> int:
     out = 0
     for endpoint, source in (("demandmet1chartdata", "npp_demand"),
                              ("demandmet2chartdata", "npp_fuelmix")):
-        # This host drops TCP connections intermittently, from everywhere.
-        # Measured 2026-08-18 from an Indian residential line: four attempts
-        # back to back gave 21.07s timeout, 21.05s, 21.05s, then 0.52s and
-        # 7,201 bytes. It either answers at once or never, so a long timeout
-        # only waits longer for the same failure — short and repeated wins.
-        r = None
-        for _ in range(4):
-            try:
-                r = requests.get(NPP_DASH + endpoint, headers=UA,
-                                 timeout=6, verify=False)
-                r.raise_for_status()
-                break
-            except Exception:
-                r = None
-        if r is None:
-            raise RuntimeError(f"npp {endpoint} unreachable after 4 attempts")
+        # ONE attempt, and only when the stored window has actually aged.
+        #
+        # On 2026-08-18 this endpoint answered reliably all morning, then began
+        # refusing TCP connections — from the laptop and from a Lambda in
+        # ap-south-1 alike — after roughly forty requests inside ninety
+        # minutes. A 4x retry loop was added first and made it worse: rapid
+        # repeat connections are the opposite of backing off from a host that
+        # is throttling you.
+        #
+        # The window is ~4.1 hours wide, so nothing is lost by fetching once
+        # every 90 minutes; _npp_due() checks what is already stored rather
+        # than polling on every tick. That is ~16 requests a day against a
+        # government site, for data that needs 12.
+        if not _npp_due(source):
+            continue
+        r = requests.get(NPP_DASH + endpoint, headers=UA, timeout=20,
+                         verify=False)
+        r.raise_for_status()
         rows = []
         for x in r.json():
             stamp = x.get("updated_on")

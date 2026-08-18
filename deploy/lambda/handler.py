@@ -61,8 +61,7 @@ TIMEOUT = 25
 #
 # So: short timeout, several attempts. Fail in 6s and try again rather than
 # hang for 25s and give up.
-NPP_TIMEOUT = 6
-NPP_ATTEMPTS = 4
+NPP_TIMEOUT = 25
 
 # Several of these are state utility sites with expired or mis-chained
 # certificates. The laptop collector already runs with verification off for
@@ -99,16 +98,9 @@ def _get(url: str, referer: str | None = None, timeout: int = TIMEOUT) -> bytes:
     return _open(urllib.request.Request(url, headers=_headers(referer)), timeout)
 
 
-def _get_flaky(url: str, attempts: int = NPP_ATTEMPTS,
-               timeout: int = NPP_TIMEOUT) -> bytes:
-    """GET a host that drops SYNs — see the NPP_TIMEOUT note above."""
-    last = None
-    for _ in range(attempts):
-        try:
-            return _get(url, timeout=timeout)
-        except Exception as e:
-            last = e
-    raise last
+def _get_flaky(url: str, timeout: int = NPP_TIMEOUT) -> bytes:
+    """One attempt, patient timeout. See the NPP note above for why not more."""
+    return _get(url, timeout=timeout)
 
 
 def _post(url: str, payload: dict, referer: str | None = None) -> bytes:
@@ -315,7 +307,24 @@ def npp_national() -> int:
     return out
 
 
-SOURCES = [("merit", merit), ("npp_national", npp_national), ("upsldc", upsldc),
+# npp_national is deliberately NOT here.
+#
+# Its two endpoints serve a rolling ~4.1 hour window, so roughly twelve polls a
+# day captures every 4-minute block with nothing lost. This function runs 96
+# times a day. Polling a 4-hour window every 15 minutes fetches the same rows
+# sixteen times over, and against a government host that is asking to be
+# throttled — which is very likely what happened on 2026-08-18, when the
+# endpoint answered reliably all morning, then began refusing TCP connections
+# from this laptop AND from Lambda after about forty requests inside ninety
+# minutes. The 4x retry added earlier made that worse, not better: eight rapid
+# connection attempts per invocation is the opposite of backing off.
+#
+# CI owns these two endpoints. Its throttled ~12 runs a day is not a limitation
+# there, it is the correct cadence, and origin/main already carries fuel-mix
+# rows landed that way. The function below is kept so it can be attached to a
+# separate 2-hourly schedule if redundancy is ever wanted; it must not go back
+# on this one.
+SOURCES = [("merit", merit), ("upsldc", upsldc),
            ("pstcl", pstcl), ("area_price", area_price)]
 
 
