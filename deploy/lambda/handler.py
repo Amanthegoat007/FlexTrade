@@ -168,8 +168,30 @@ def _store(source: str, rows: list[dict], dedupe: tuple[str, ...] = ()) -> int:
     if not fresh:
         return 0
 
+    cols = list(rows[0].keys())
     buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+
+    # A source's columns can change between deploys. Appending wider rows under
+    # an older narrow header yields a file no CSV reader can parse — it cost us
+    # eight rows of UP data on 18 Aug, when UPSLDC moved to the typed endpoint
+    # and gained nine fields mid-day. So a shape change rewrites the object
+    # under the union of both headers instead of appending to it.
+    if existing:
+        rdr = csv.reader(io.StringIO(existing))
+        header = next(rdr, None)
+        if header and header != cols:
+            merged = header + [c for c in cols if c not in header]
+            w = csv.DictWriter(buf, fieldnames=merged, extrasaction="ignore")
+            w.writeheader()
+            for r in rdr:
+                w.writerow(dict(zip(header, r + [""] * (len(header) - len(r)))))
+            for r in fresh:
+                w.writerow(r)
+            s3.put_object(Bucket=BUCKET, Key=key, Body=buf.getvalue().encode(),
+                          ContentType="text/csv")
+            return len(fresh)
+
+    w = csv.DictWriter(buf, fieldnames=cols)
     if not existing:
         w.writeheader()
     for r in fresh:

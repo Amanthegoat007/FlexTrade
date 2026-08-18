@@ -39,10 +39,37 @@ def _write(source: str, rows: list[dict]) -> int:
     stamp = datetime.now(timezone.utc)
     path = OUT / f"{source}-{stamp:%Y-%m}.csv"
     cols = list(rows[0].keys())
-    new = not path.exists()
+
+    # A source's columns can change mid-month — UPSLDC gained nine when it
+    # moved to the typed endpoint on 18 Aug. Appending wider rows under the old
+    # narrow header produces a file pandas cannot parse at all, which is how
+    # eight rows of UP data became unreadable. So when the shape changes, the
+    # file is rewritten under the union of both headers rather than appended
+    # to. Running this once repairs a file already in the mixed state.
+    old_rows, header = [], None
+    if path.exists():
+        with path.open(newline="", encoding="utf-8") as fh:
+            rdr = csv.reader(fh)
+            header = next(rdr, None)
+            if header:
+                # rows written before a widening are short; pad rather than drop
+                old_rows = [dict(zip(header, r + [""] * (len(header) - len(r))))
+                            for r in rdr]
+
+    if header is not None and header != cols:
+        merged = header + [c for c in cols if c not in header]
+        with path.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, fieldnames=merged, extrasaction="ignore")
+            w.writeheader()
+            for r in old_rows:
+                w.writerow(r)
+            for r in rows:
+                w.writerow(r)
+        return len(rows)
+
     with path.open("a", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=cols)
-        if new:
+        if header is None:
             w.writeheader()
         for r in rows:
             w.writerow(r)
