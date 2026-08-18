@@ -8,3 +8,17 @@ Delhi load band (P10-P90, trailing-window CQR)  —  8 rolling origins (30d each
   MAE      mean    166.397   worst    208.210   std    39.860
   RMSE     mean    225.683   worst    289.445   std    52.445
   bias     mean    -69.280   worst   -143.461   std    74.861
+
+Delhi day-ahead peak (LightGBM + validation bias correction)  —  8 rolling origins (30d each), 240 blocks, 2025-10-06 -> 2026-06-02
+  WAPE %   mean      3.803   worst      5.483   std     1.051
+  MAE      mean    185.634   worst    256.667   std    55.185
+  RMSE     mean    239.664   worst    316.952   std    66.092
+  bias     mean    -34.095   worst   -205.205   std   127.009
+  Diebold-Mariano vs benchmark: stat -10.263 p=0.0 -> A
+
+RTM intraday price (vs the hour-ratio incumbent)  —  5 rolling origins (30d each), 12,341 blocks, 2026-03-18 -> 2026-08-14
+  WAPE %   mean     20.481   worst     23.658   std     2.126
+  MAE      mean    827.316   worst    925.445   std    84.650
+  RMSE     mean  1,267.865   worst  1,408.079   std   100.367
+  bias     mean   -241.800   worst   -381.973   std    73.271
+  Diebold-Mariano vs benchmark: stat -27.849 p=0.0 -> A
