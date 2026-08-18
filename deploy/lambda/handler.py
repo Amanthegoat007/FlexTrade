@@ -46,6 +46,22 @@ PREFIX = os.environ.get("PREFIX", "collected")
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120"
 TIMEOUT = 25
 
+# npp.gov.in does not answer this account's region at all. Measured 2026-08-18
+# from ap-south-1: TCP connect times out (Errno 110, no SYN-ACK), while the
+# same request succeeds from an Indian residential line AND from GitHub's
+# runners, which land on Azure addresses outside India. So this is not "cloud
+# IPs are blocked" — it is these ranges specifically, and no header or retry
+# reaches past a blackholed SYN.
+#
+# It is left in the source list rather than deleted, on a short timeout. NPP
+# serves a rolling ~4.1 hour window and CI polls well inside it, so CI owns
+# these two endpoints and Lambda adds nothing by succeeding here. But routing
+# and blocklists change, and a source that quietly starts working again is
+# worth more than one that has to be remembered and re-added. The short
+# timeout caps the cost of being wrong at a few seconds an invocation instead
+# of the ~25s the default was burning.
+NPP_TIMEOUT = 4
+
 # Several of these are state utility sites with expired or mis-chained
 # certificates. The laptop collector already runs with verification off for
 # the same reason; this is public, unauthenticated, read-only data and there
@@ -65,8 +81,8 @@ OPENER = urllib.request.build_opener(
     urllib.request.HTTPSHandler(context=SSL_CTX))
 
 
-def _open(req: urllib.request.Request) -> bytes:
-    with OPENER.open(req, timeout=TIMEOUT) as r:
+def _open(req: urllib.request.Request, timeout: int = TIMEOUT) -> bytes:
+    with OPENER.open(req, timeout=timeout) as r:
         return r.read()
 
 
@@ -77,8 +93,8 @@ def _headers(referer: str | None, extra: dict | None = None) -> dict:
     return {**h, **(extra or {})}
 
 
-def _get(url: str, referer: str | None = None) -> bytes:
-    return _open(urllib.request.Request(url, headers=_headers(referer)))
+def _get(url: str, referer: str | None = None, timeout: int = TIMEOUT) -> bytes:
+    return _open(urllib.request.Request(url, headers=_headers(referer)), timeout)
 
 
 def _post(url: str, payload: dict, referer: str | None = None) -> bytes:
@@ -271,7 +287,8 @@ def npp_national() -> int:
     for endpoint, source in (("demandmet1chartdata", "npp_demand"),
                              ("demandmet2chartdata", "npp_fuelmix")):
         rows = []
-        for x in json.loads(_get("https://npp.gov.in/dashBoard/" + endpoint)):
+        for x in json.loads(_get("https://npp.gov.in/dashBoard/" + endpoint,
+                                 timeout=NPP_TIMEOUT)):
             stamp = x.get("updated_on")
             if not stamp:
                 continue
