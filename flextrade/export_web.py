@@ -327,12 +327,38 @@ def export_meta():
         except Exception:
             pass
 
+    # --- how much has actually been collected -------------------------------
+    # Every upstream in this project is snapshot-only: MERIT, the SLDCs, the
+    # Vidyut PRAVAH area price and NPP all publish "now" and no history. Depth
+    # therefore exists only because something was running, and a missed block
+    # is gone permanently. That makes the row count a real claim about the
+    # asset rather than a vanity number, so it is counted from the store on
+    # every export rather than typed into a slide.
+    collection = {"tables": [], "total_rows": 0}
+    try:
+        with store.connect() as con:
+            names = [r[0] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "ORDER BY name")]
+            for t in names:
+                try:
+                    n = con.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0]
+                except Exception:
+                    continue
+                collection["tables"].append({"table": t, "rows": int(n)})
+                collection["total_rows"] += int(n)
+        collection["tables"].sort(key=lambda r: -r["rows"])
+        collection["table_count"] = len(collection["tables"])
+    except Exception as e:
+        collection["error"] = f"{type(e).__name__}: {str(e)[:90]}"
+
     _dump("meta.json", {
         "generated_at": datetime.now(),
         "freshness": freshness,
         "datasets": datasets,
         "metrics": metrics,
         "health": health,
+        "collection": collection,
     })
 
 

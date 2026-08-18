@@ -9,6 +9,7 @@ import Operations from "./pages/Operations";
 import Overview from "./pages/Overview";
 import Renewables from "./pages/Renewables";
 import Roadmap from "./pages/Roadmap";
+import Reserves from "./pages/Reserves";
 import Sizing from "./pages/Sizing";
 import Solutions from "./pages/Solutions";
 import StateWorkspace from "./pages/StateWorkspace";
@@ -29,6 +30,7 @@ const NAV = [
   ["/renewables", "☀", "Renewables & DSM"],
   ["group", "Plan & Grow"],
   ["/sizing", "▤", "Sizing & Bankability"],
+  ["/reserves", "⚖", "Reserves & Regulation"],
   ["/solutions", "◈", "Solutions"],
   ["/roadmap", "➜", "Roadmap"],
   ["group", "Platform"],
@@ -107,6 +109,7 @@ export default function App() {
             <Route path="/trading" element={<TradingDesk />} />
             <Route path="/operations" element={<Operations />} />
             <Route path="/sizing" element={<Sizing />} />
+            <Route path="/reserves" element={<Reserves />} />
             <Route path="/solutions" element={<Solutions />} />
             <Route path="/renewables" element={<Renewables />} />
             <Route path="/states" element={<States />} />

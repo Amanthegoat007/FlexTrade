@@ -83,6 +83,30 @@ export default function Overview() {
           info="MAPE, LGBM" hint="Delhi, day-ahead, 4.33% test MAPE" />
       </div>
 
+      {meta?.collection?.total_rows > 0 && (
+        <>
+          <h2 className="section-title">The data asset</h2>
+          <div className="grid cols-3">
+            <Stat label="Rows collected" info="rows"
+              value={meta.collection.total_rows.toLocaleString("en-IN")}
+              hint={`across ${meta.collection.table_count} tables, counted from the store at export`} />
+            <Stat label="Deepest series" info="5-min"
+              value={(meta.collection.tables?.[0]?.rows ?? 0).toLocaleString("en-IN")}
+              hint={`${meta.collection.tables?.[0]?.table ?? "—"} — Delhi load at 5-minute resolution`} />
+            <Stat label="Collectors running" value="3"
+              hint="AWS Lambda (Mumbai, 15-min) · GitHub Actions · laptop" />
+          </div>
+          <p className="muted" style={{ marginTop: 8 }}>
+            Every upstream here is snapshot-only — MERIT, the state SLDCs, the
+            Vidyut PRAVAH area price and NPP all publish "now" and no history.
+            None of this can be bought or backfilled later: it exists because
+            something was running at the time, and a missed block is gone
+            permanently. That is why the count is read from the store on every
+            export rather than quoted from memory.
+          </p>
+        </>
+      )}
+
       <div className="grid cols-2" style={{ marginTop: 14 }}>
         <Card title="Today's IEX clearing prices" sub="₹/MWh per 15-min block, live scrape. One pan-India price per block across DAM, RTM and GDAM — not a Delhi price.">
           <TimeSeries data={priceRows} height={250} yLabel="₹/MWh"

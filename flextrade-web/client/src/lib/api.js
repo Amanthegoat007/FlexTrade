@@ -29,6 +29,8 @@ const STATIC_FILES = {
   "/api/re-state": "re_state",
   "/api/stress": "stress",
   "/api/dsm-state": "dsm_state",
+  "/api/tras": "tras",
+  "/api/ists-rule": "ists_rule",
   "/api/live": "live",
   "/api/bess/history": "bess_history",
   "/api/load/recent": "load_recent",
