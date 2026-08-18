@@ -13,41 +13,41 @@
     {
       "lo_edge": 0.0,
       "hi_edge": 0.05,
-      "m_lo": -0.0502,
-      "m_hi": -0.016,
-      "tail_lo": 0.1075,
-      "tail_hi": 0.1108,
-      "blocks": 3093,
-      "coverage_pct": 80.2
+      "m_lo": -0.1157,
+      "m_hi": 0.0268,
+      "tail_lo": 0.1224,
+      "tail_hi": 0.0937,
+      "blocks": 2790,
+      "coverage_pct": 79.4
     },
     {
       "lo_edge": 0.05,
       "hi_edge": 0.6,
-      "m_lo": -0.0281,
+      "m_lo": -0.1343,
       "m_hi": 0.0,
-      "tail_lo": 0.0907,
-      "tail_hi": 0.1213,
-      "blocks": 579,
-      "coverage_pct": 80.3
+      "tail_lo": 0.1176,
+      "tail_hi": 0.1449,
+      "blocks": 469,
+      "coverage_pct": 86.1
     },
     {
       "lo_edge": 0.6,
       "hi_edge": 1.01,
       "m_lo": -0.0,
       "m_hi": 0.0,
-      "tail_lo": 0.1651,
-      "tail_hi": 0.194,
-      "blocks": 1224,
-      "coverage_pct": 95.8
+      "tail_lo": 0.1623,
+      "tail_hi": 0.19,
+      "blocks": 1253,
+      "coverage_pct": 95.4
     }
   ],
   "log_margin_lo": -0.0,
   "log_margin_hi": 0.0,
-  "walk_days": 51,
-  "walk_coverage_pct": 84.1,
-  "walk_worst_30d_pct": 82.1,
-  "walk_worst_regime_pct": 80.2,
-  "mean_width_rs_mwh": 1770.0,
+  "walk_days": 47,
+  "walk_coverage_pct": 84.6,
+  "walk_worst_30d_pct": 80.8,
+  "walk_worst_regime_pct": 79.4,
+  "mean_width_rs_mwh": 1557.0,
   "trail_days": 45,
   "aci_gamma": 0.02,
   "note": "Walk-forward coverage, not single-window. The previous static margin reported 94.4% but measured 74.7% under a rolling origin with retrained heads; this is calibrated per cap-regime and adapts online to seasonal drift."
