@@ -46,21 +46,23 @@ PREFIX = os.environ.get("PREFIX", "collected")
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120"
 TIMEOUT = 25
 
-# npp.gov.in does not answer this account's region at all. Measured 2026-08-18
-# from ap-south-1: TCP connect times out (Errno 110, no SYN-ACK), while the
-# same request succeeds from an Indian residential line AND from GitHub's
-# runners, which land on Azure addresses outside India. So this is not "cloud
-# IPs are blocked" — it is these ranges specifically, and no header or retry
-# reaches past a blackholed SYN.
+# npp.gov.in drops TCP connections intermittently, from everywhere.
 #
-# It is left in the source list rather than deleted, on a short timeout. NPP
-# serves a rolling ~4.1 hour window and CI polls well inside it, so CI owns
-# these two endpoints and Lambda adds nothing by succeeding here. But routing
-# and blocklists change, and a source that quietly starts working again is
-# worth more than one that has to be remembered and re-added. The short
-# timeout caps the cost of being wrong at a few seconds an invocation instead
-# of the ~25s the default was burning.
-NPP_TIMEOUT = 4
+# Measured 2026-08-18 from an Indian residential line: four consecutive
+# attempts gave 21.07s timeout, 21.05s timeout, 21.05s timeout, then 0.52s and
+# 7,201 bytes. The host either answers immediately or never answers at all, so
+# a long timeout buys nothing — it just waits longer for the same failure.
+#
+# The first Lambda invocation failed both NPP endpoints and looked like
+# ap-south-1 being blackholed, which is what a datacentre IP block would also
+# look like. It was not: a run of failures is the normal behaviour of this host
+# and two in a row needs no extra explanation. Worth stating plainly because
+# the wrong diagnosis would have sent us shopping for proxies.
+#
+# So: short timeout, several attempts. Fail in 6s and try again rather than
+# hang for 25s and give up.
+NPP_TIMEOUT = 6
+NPP_ATTEMPTS = 4
 
 # Several of these are state utility sites with expired or mis-chained
 # certificates. The laptop collector already runs with verification off for
@@ -95,6 +97,18 @@ def _headers(referer: str | None, extra: dict | None = None) -> dict:
 
 def _get(url: str, referer: str | None = None, timeout: int = TIMEOUT) -> bytes:
     return _open(urllib.request.Request(url, headers=_headers(referer)), timeout)
+
+
+def _get_flaky(url: str, attempts: int = NPP_ATTEMPTS,
+               timeout: int = NPP_TIMEOUT) -> bytes:
+    """GET a host that drops SYNs — see the NPP_TIMEOUT note above."""
+    last = None
+    for _ in range(attempts):
+        try:
+            return _get(url, timeout=timeout)
+        except Exception as e:
+            last = e
+    raise last
 
 
 def _post(url: str, payload: dict, referer: str | None = None) -> bytes:
@@ -287,8 +301,7 @@ def npp_national() -> int:
     for endpoint, source in (("demandmet1chartdata", "npp_demand"),
                              ("demandmet2chartdata", "npp_fuelmix")):
         rows = []
-        for x in json.loads(_get("https://npp.gov.in/dashBoard/" + endpoint,
-                                 timeout=NPP_TIMEOUT)):
+        for x in json.loads(_get_flaky("https://npp.gov.in/dashBoard/" + endpoint)):
             stamp = x.get("updated_on")
             if not stamp:
                 continue

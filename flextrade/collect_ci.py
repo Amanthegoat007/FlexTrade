@@ -285,9 +285,22 @@ def npp_national() -> int:
     out = 0
     for endpoint, source in (("demandmet1chartdata", "npp_demand"),
                              ("demandmet2chartdata", "npp_fuelmix")):
-        r = requests.get(NPP_DASH + endpoint, headers=UA,
-                         timeout=TIMEOUT, verify=False)
-        r.raise_for_status()
+        # This host drops TCP connections intermittently, from everywhere.
+        # Measured 2026-08-18 from an Indian residential line: four attempts
+        # back to back gave 21.07s timeout, 21.05s, 21.05s, then 0.52s and
+        # 7,201 bytes. It either answers at once or never, so a long timeout
+        # only waits longer for the same failure — short and repeated wins.
+        r = None
+        for _ in range(4):
+            try:
+                r = requests.get(NPP_DASH + endpoint, headers=UA,
+                                 timeout=6, verify=False)
+                r.raise_for_status()
+                break
+            except Exception:
+                r = None
+        if r is None:
+            raise RuntimeError(f"npp {endpoint} unreachable after 4 attempts")
         rows = []
         for x in r.json():
             stamp = x.get("updated_on")
