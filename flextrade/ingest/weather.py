@@ -69,6 +69,101 @@ def fetch_archive(start: str, end: str) -> pd.DataFrame:
     return _to_df(js)
 
 
+def fetch_forecast_archive(start: str, end: str, lead_days: int = 1) -> pd.DataFrame:
+    """What the forecast SAID `lead_days` before each hour, for a past window.
+
+    Every accuracy number this project has published for the load model was
+    computed against `kind="actual"` weather, because that is all the store
+    held before 2026-07-07. That is perfect foresight: a day-ahead forecast
+    issued before the 12:00 gate cannot know tomorrow's temperature, it knows
+    tomorrow's temperature FORECAST. Scoring against the actual credits the
+    model with weather skill it never had.
+
+    Open-Meteo archives its own past runs, so the honest input is recoverable
+    for the whole history rather than only from the day we started saving it.
+    Measured at Delhi over 2026-05-20..21, the D-1 forecast differs from the
+    analysis by 0.77 C MAE and the D-2 forecast by 1.10 C — error growing with
+    lead time is the signature of a real forecast archive, not reanalysis
+    relabelled.
+
+    Returned with kind="forecast_d{lead}" so it sits beside the actuals rather
+    than overwriting them: the comparison between the two IS the measurement of
+    how much of our accuracy was foresight.
+    """
+    if not 1 <= lead_days <= 7:
+        raise ValueError("lead_days must be 1..7 — Open-Meteo archives 7 runs")
+    fields = [f"{v}_previous_day{lead_days}" for v in HOURLY.split(",")]
+    js = _get("https://historical-forecast-api.open-meteo.com/v1/forecast",
+              dict(latitude=LAT, longitude=LON, hourly=",".join(fields),
+                   start_date=start, end_date=end, timezone="Asia/Kolkata"),
+              timeout=90)
+    df = pd.DataFrame(js["hourly"])
+    df["ts"] = pd.to_datetime(df.pop("time"))
+    # strip the _previous_dayN suffix, then map to our column names
+    df = df.rename(columns={c: COLS.get(c.rsplit("_previous_day", 1)[0],
+                                        c.rsplit("_previous_day", 1)[0])
+                            for c in df.columns if c != "ts"})
+    return df.set_index("ts").sort_index()
+
+
+_FCST_SCHEMA = """
+CREATE TABLE IF NOT EXISTS weather_fcst (
+    ts TEXT NOT NULL,
+    lead_days INTEGER NOT NULL,
+    temp_c REAL, rh_pct REAL, apparent_temp_c REAL,
+    rain_mm REAL, cloud_pct REAL, fetched_at TEXT,
+    PRIMARY KEY (ts, lead_days));
+"""
+
+
+def backfill_forecast_weather(start: str, end: str, lead_days: int = 1,
+                              chunk_days: int = 120) -> int:
+    """Store the D-`lead_days` forecast for a past window, in chunks.
+
+    Deliberately a SEPARATE TABLE, not kind="forecast_dN" inside `weather`.
+    That table's primary key is ts ALONE — not (ts, kind) — so an
+    INSERT OR REPLACE carrying a forecast row would silently overwrite the
+    ACTUAL reading for the same hour and destroy five years of observations
+    one chunk at a time, with no error and nothing in the diff to notice.
+    weather_fcst keys on (ts, lead_days) instead, so several lead times can
+    coexist and the actuals cannot be touched.
+
+    One request per few months keeps each response small and lets a failure
+    cost a chunk rather than the run.
+    """
+    with store.connect() as con:
+        con.executescript(_FCST_SCHEMA)
+    total = 0
+    cur, stop = pd.Timestamp(start), pd.Timestamp(end)
+    while cur <= stop:
+        chunk_end = min(cur + pd.Timedelta(days=chunk_days - 1), stop)
+        try:
+            df = fetch_forecast_archive(f"{cur:%Y-%m-%d}", f"{chunk_end:%Y-%m-%d}",
+                                        lead_days).dropna(how="all")
+            if len(df):
+                df = df.reset_index()
+                df["ts"] = df["ts"].dt.strftime("%Y-%m-%d %H:%M:%S")
+                df["lead_days"] = lead_days
+                df["fetched_at"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                cols = [c for c in ("ts", "lead_days", "temp_c", "rh_pct",
+                                    "apparent_temp_c", "rain_mm", "cloud_pct",
+                                    "fetched_at") if c in df.columns]
+                with store.connect() as con:
+                    con.executemany(
+                        f"INSERT OR REPLACE INTO weather_fcst ({','.join(cols)}) "
+                        f"VALUES ({','.join('?' * len(cols))})",
+                        df[cols].where(pd.notna(df[cols]), None)
+                        .itertuples(index=False, name=None))
+                total += len(df)
+            print(f"  {cur:%Y-%m-%d} -> {chunk_end:%Y-%m-%d}: {len(df)} hours",
+                  flush=True)
+        except Exception as e:
+            print(f"  {cur:%Y-%m-%d} -> {chunk_end:%Y-%m-%d}: FAILED "
+                  f"{type(e).__name__}: {str(e)[:80]}", flush=True)
+        cur = chunk_end + pd.Timedelta(days=1)
+    return total
+
+
 RE_HOURLY = ("shortwave_radiation,direct_normal_irradiance,diffuse_radiation,"
              "wind_speed_10m,wind_speed_100m,temperature_2m,cloud_cover")
 RE_COLS = {"shortwave_radiation": "ghi", "direct_normal_irradiance": "dni",
