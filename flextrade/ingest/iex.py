@@ -219,6 +219,28 @@ def fetch_hpdam(d: date | None = None) -> pd.DataFrame:
     purchase bid volume here is unmet demand at the DAM ceiling.
 
     Same schema and same date parameters as DAM, so it reuses _parse().
+
+    TESTED AS A PRICE FEATURE AND REJECTED, 19 Aug 2026. Kept because the
+    series is cheap, backfillable and worth having when the regime settles —
+    not because it currently earns its place.
+
+    Five lagged forms were tried (traded flag, cleared MCP, purchase bid, and
+    7-day rolling means of the first and third), lagged a full day because
+    HP-DAM for delivery day D clears alongside DAM for D and is therefore NOT
+    knowable at a 12:00 gate on D-1. Six rolling origins, both hurdle stages
+    refit per origin:
+
+        MAE 649.6 -> 644.7   -0.76%   wins 4/6   paired t 0.588
+
+    A 0.76% point estimate that loses two origins outright and sits nowhere
+    near significance is a tie, and a tie is a rejection: five features is real
+    maintenance and real overfitting surface.
+
+    The reason it cannot help yet is in the data, not the fitting. Trading is
+    violently non-stationary — 8.18% of blocks in 2023, 0.17% in 2024, 0.99%
+    in 2025, 2.80% in 2026. A model shown the 2023 regime learns a relationship
+    that no longer exists. Worth retesting once two adjacent years share a base
+    rate, or on a target where scarcity itself is the label rather than price.
     """
     if d is None:
         params = {"interval": "ONE_FOURTH_HOUR", "dp": "TODAY"}
