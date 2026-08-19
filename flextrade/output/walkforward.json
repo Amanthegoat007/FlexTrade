@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-18 21:46:46",
+ "generated_at": "2026-08-19 12:18:28",
  "method": "rolling origin, non-overlapping test windows, model refitted at every origin; interval score is Gneiting & Raftery (2007), coverage tests are Kupiec (1995) and Christoffersen (1998)",
  "models": [
   {

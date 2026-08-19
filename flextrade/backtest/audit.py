@@ -245,6 +245,85 @@ def rtm_incumbent_task(o: Origin) -> pd.DataFrame:
                          "point": np.clip(anchor * scale, 0, rt.CAP)}, index=te.index)
 
 
+# ------------------------------------------------------- DAM price model --
+PRICE_CAL_DAYS = 30          # production's validation window, mirrored
+_price_panel = None
+
+
+def _price_frame():
+    """Feature frame for the DAM hurdle model, built once and reused.
+
+    Dropped on REQUIRED_FEATURES only, exactly as production does since
+    18 Aug — listing the coal block here would silently discard 72% of the
+    history and the audit would then be scoring a model nobody ships.
+    """
+    global _price_panel
+    if _price_panel is None:
+        from models import price_model as pm
+        _price_panel = pm.build_features(pm._table()).dropna(
+            subset=pm.REQUIRED_FEATURES + ["mcp_rs_mwh"])
+    return _price_panel
+
+
+def price_task(o: Origin) -> pd.DataFrame:
+    """Day-ahead DAM price — the shipped cap-hurdle, refitted at each origin.
+
+    BOTH stages are refitted: the classifier that predicts P(block pins at the
+    Rs 10,000 cap) and the regressor for the below-cap level. Refitting only
+    one would leak the other's view of the test window, which is the mistake
+    that contaminated an earlier version of this harness.
+
+    This is the model the bid sheet is built on and it had never been audited
+    under rolling origins — it was added on 19 Aug after the training set went
+    from 31,683 rows to 136,839 and no walk-forward number existed to say
+    whether that helped out of sample.
+    """
+    from models import price_model as pm
+
+    f = _price_frame()
+    cal_start = o.train_end - pd.Timedelta(days=PRICE_CAL_DAYS)
+    tr = f[f.index < cal_start]
+    cal = f[(f.index >= cal_start) & (f.index < o.train_end)]
+    te = f[(f.index >= o.test_start) & (f.index < o.test_end)]
+    if len(tr) < 5000 or len(cal) < 500 or len(te) < 200:
+        raise RuntimeError(f"thin split: train {len(tr)}, cal {len(cal)}, test {len(te)}")
+
+    params = dict(n_estimators=2000, learning_rate=0.03, num_leaves=63,
+                  min_child_samples=40, subsample=0.8, subsample_freq=1,
+                  colsample_bytree=0.8, reg_lambda=1.0, random_state=42, verbose=-1)
+    ytr = (tr["mcp_rs_mwh"] >= pm.CAP * 0.95).astype(int)
+    ycal = (cal["mcp_rs_mwh"] >= pm.CAP * 0.95).astype(int)
+    clf = lgb.LGBMClassifier(**params)
+    clf.fit(tr[pm.FEATURES], ytr, eval_set=[(cal[pm.FEATURES], ycal)],
+            callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)])
+
+    btr, bcal = tr[ytr == 0], cal[ycal == 0]
+    reg = lgb.LGBMRegressor(**params)
+    reg.fit(btr[pm.FEATURES], np.log(btr["mcp_rs_mwh"].clip(lower=50)),
+            eval_set=[(bcal[pm.FEATURES], np.log(bcal["mcp_rs_mwh"].clip(lower=50)))],
+            callbacks=[lgb.early_stopping(100, verbose=False), lgb.log_evaluation(0)])
+
+    pcap = clf.predict_proba(te[pm.FEATURES])[:, 1]
+    pbelow = np.clip(np.exp(reg.predict(te[pm.FEATURES])), 0, pm.CAP)
+    pred = pcap * pm.CAP + (1 - pcap) * pbelow
+    return pd.DataFrame({"actual": te["mcp_rs_mwh"].values, "point": pred},
+                        index=te.index)
+
+
+def price_naive_task(o: Origin) -> pd.DataFrame:
+    """Seasonal naive: the same 15-minute block one day earlier.
+
+    The honest baseline for a day-ahead price, and a hard one — DAM is strongly
+    autocorrelated block to block across days. p_lag_1d is already a feature of
+    the real model, so this asks whether everything else earns its keep.
+    """
+    f = _price_frame()
+    te = f[(f.index >= o.test_start) & (f.index < o.test_end)]
+    prev = f["mcp_rs_mwh"].reindex(te.index - pd.Timedelta(days=1))
+    return pd.DataFrame({"actual": te["mcp_rs_mwh"].values,
+                         "point": prev.values}, index=te.index).dropna()
+
+
 SPECS = {
     "load_band": lambda: Spec(
         name="Delhi load band (P10-P90, trailing-window CQR)",
@@ -256,6 +335,10 @@ SPECS = {
     # RTM has only 367 days of scraped history, so it gets a shorter training
     # floor and fewer origins than the 5-year load panel. Fewer origins means a
     # noisier worst-window figure, which is reported rather than smoothed over.
+    "price": lambda: Spec(
+        name="DAM day-ahead price (cap-hurdle, vs seasonal naive)",
+        task=price_task, unit="Rs/MWh", benchmark=price_naive_task,
+        min_train_days=400, n_origins=6),
     "rtm": lambda: Spec(
         name="RTM intraday price (vs the hour-ratio incumbent)",
         task=rtm_task, unit="Rs/MWh", benchmark=rtm_incumbent_task,
