@@ -4,48 +4,14 @@
 import { Card, InfoTip, Loading, PageHeader, Stat, Tabs } from "../components/ui";
 import { FanChart, HBar } from "../components/charts";
 import { useApi } from "../lib/api";
+import WalkForward, { wfModel } from "../components/WalkForward";
 
 const pct = (v, d = 1) => (v == null ? "—" : `${Number(v).toFixed(d)}%`);
 const rs = (v) =>
   v == null ? "—" : `₹${Math.round(Number(v)).toLocaleString("en-IN")}`;
 
 
-/* Rolling-origin validation, rendered beside the forecast it validates.
-   These statistics lived only on the Methodology page, which is the one page a
-   sceptical reader reaches last. A coverage claim belongs next to the band it
-   describes, and a Diebold-Mariano result belongs next to the model it beats. */
-function WalkForward({ meta, match, children }) {
-  const wf = meta?.metrics?.walkforward;
-  const m = wf?.models?.find((x) => x.model.toLowerCase().includes(match));
-  if (!m) return null;
-  const dm = m.vs_benchmark;
-  return (
-    <Card title="Rolling-origin validation"
-      sub={`${m.origins_run} non-overlapping origins x ${m.test_days} days, ${m.window}, ${m.blocks?.toLocaleString("en-IN")} scored points. The model is refitted at every origin, so no test window sits inside its own training data.`}>
-      <div className="grid cols-3">
-        <Stat label="WAPE across origins" value={pct(m.wape_pct?.mean, 2)}
-          hint={`worst origin ${pct(m.wape_pct?.worst, 2)} · sd ${Number(m.wape_pct?.std ?? 0).toFixed(2)}`} />
-        <Stat label="MAE across origins"
-          value={m.mae?.mean != null ? Math.round(m.mae.mean).toLocaleString("en-IN") : "—"}
-          unit={m.unit} hint={`worst origin ${Math.round(m.mae?.worst ?? 0).toLocaleString("en-IN")} ${m.unit}`} />
-        {dm ? (
-          <Stat label="Diebold-Mariano vs baseline"
-            value={`t = ${Number(dm.stat).toFixed(2)}`}
-            hint={dm.p_value === 0 ? "p < 0.001 — the win is not luck" : `p = ${dm.p_value}`} />
-        ) : (
-          <Stat label="Interval score"
-            value={m.interval_score_mean != null ? Math.round(m.interval_score_mean).toLocaleString("en-IN") : "—"}
-            hint="proper rule: width + miss penalty, lower is better" />
-        )}
-      </div>
-      {children}
-    </Card>
-  );
-}
-
-const bandWf = (meta) =>
-  meta?.metrics?.walkforward?.models?.find((m) =>
-    m.model.toLowerCase().includes("load band"));
+const bandWf = (meta) => wfModel(meta, "load band");
 
 const TABS = [
   { id: "rtm", label: "RTM & Spread", icon: "⇄", hint: "intraday" },

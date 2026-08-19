@@ -1,6 +1,7 @@
 import { Card, Loading, PageHeader, Stat } from "../components/ui";
 import { FanChart, TimeSeries } from "../components/charts";
 import { fmtINR, useApi } from "../lib/api";
+import WalkForward from "../components/WalkForward";
 
 export default function TradingDesk() {
   const { data: plan, loading, error } = useApi("/api/plan");
@@ -60,10 +61,23 @@ export default function TradingDesk() {
 
       {quants.length > 0 && (
         <Card title="Price forecast with uncertainty band" style={{ marginTop: 14 }}
-          sub="Quantile LightGBM with an asymmetric conformal guard. The band widens in the volatile evening peak and tightens overnight — real market structure. It is wide, and it over-covers (~94% against 80%): the ₹10,000 price cap makes the upper bound exact on cap blocks and loose beneath them, and one multiplicative factor cannot express both. We report coverage beside width rather than selling the band as precise.">
+          sub="A censored mixture — the ₹10,000 cap is modelled as an atom rather than smoothed over — with a regime-conditional conformal guard recalibrated on a trailing window. The band widens in the volatile evening peak and tightens overnight, which is real market structure. Measured walk-forward over 47 days it covers 84.6% against an 80% target at ₹1,557/MWh mean width, worst 30 days 80.8%. It still over-covers by roughly four points and we report coverage beside width rather than selling the band as precise.">
           <FanChart data={quants} xKey="t" height={280} />
         </Card>
       )}
+
+      <WalkForward meta={meta} match="dam day-ahead price"
+        title="Is the price forecast actually any good? — rolling-origin validation">
+        <p className="muted" style={{ marginTop: 10 }}>
+          The baseline it must beat is seasonal naive: the same 15-minute block
+          one day earlier. That is deliberately hard, because yesterday's price
+          at the same block is already a feature of the model — so this asks
+          whether everything else earns its keep, not whether the model beats
+          nothing. Both stages of the cap-hurdle are refitted at every origin,
+          the classifier and the below-cap regressor alike, so no test window
+          sits inside its own training data.
+        </p>
+      </WalkForward>
 
       <div className="grid cols-2" style={{ marginTop: 14 }}>
         <Card title="Load & price forecast" sub="the two model outputs the optimizer consumes">
