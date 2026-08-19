@@ -24,7 +24,7 @@ const kpiGlossary = (h = {}) => [
   ["Correlation", "Whether forecast and reality move together, regardless of level. For arbitrage, shape is what pays — the battery needs the cheap/expensive ranking right, not the exact rupee.",
     `IEX DAM price: ${n(h.price_test_corr, 3)} test.`],
   ["WAPE", "Σ|error| ÷ Σ|actual| — one division at the end instead of one per block. The honest percentage when the target can approach zero, which RTM prices do (1st percentile ₹23).",
-    "RTM intraday: 26.6% served, vs 33.0% for the hour-ratio it replaced."],
+    "RTM intraday: 21.8% served, vs 28.9% for the hour-ratio it replaced."],
   ["Pinball loss", "The proper scoring rule for a quantile forecast — penalises a P90 that gets exceeded more than 10% of the time.",
     "Reported per quantile in the quantile metrics below."],
   ["Coverage", "% of actual outcomes falling inside the predicted band — measured walk-forward (recalibrate each day, score the next), never on a single window. A calibrated P10–P90 band should cover ~80%, and it should do so inside every regime, not just on average.",
@@ -363,8 +363,8 @@ export default function Methodology() {
                 <span className="mono">intraday horizon</span></td>
               <td>Which way to trade the deviation from a firm DAM position, 48
                 sessions a day</td>
-              <td className="num"><b>26.6% WAPE</b><br />direction <b>76.6%</b></td>
-              <td className="num">33.0% WAPE<br />direction 60.2%</td>
+              <td className="num"><b>21.8% WAPE</b><br />direction <b>75.9%</b></td>
+              <td className="num">28.9% WAPE<br />direction 48.5%</td>
             </tr>
             <tr>
               <td><b>Probabilistic load</b><br />

@@ -3,6 +3,20 @@ import { FanChart, TimeSeries } from "../components/charts";
 import { fmtINR, useApi } from "../lib/api";
 import WalkForward from "../components/WalkForward";
 
+/* The band's measured numbers move on every retrain, so they are READ rather
+   than typed. This claim has already been wrong twice: it said "~94% against
+   80%" long after the model became a censored mixture, and the corrected
+   figure I typed this morning was stale by the afternoon. A sentence that
+   quotes a metric should derive it from the metric. */
+function bandSub(meta) {
+  const h = meta?.metrics?.headline;
+  const base = "A censored mixture — the ₹10,000 cap is modelled as an atom rather than smoothed over — with a regime-conditional conformal guard recalibrated on a trailing window. The band widens in the volatile evening peak and tightens overnight, which is real market structure.";
+  if (!h?.price_band_coverage_pct) return base;
+  const cov = h.price_band_coverage_pct, tgt = h.price_band_target_pct ?? 80;
+  const over = cov - tgt;
+  return `${base} Measured walk-forward it covers ${cov.toFixed(1)}% against a ${tgt.toFixed(0)}% target at ₹${Math.round(h.price_band_width_rs_mwh ?? 0).toLocaleString("en-IN")}/MWh mean width, worst 30 days ${(h.price_band_worst_30d_pct ?? 0).toFixed(1)}%, worst cap-regime ${(h.price_band_worst_regime_pct ?? 0).toFixed(1)}%. It still ${over >= 0 ? `over-covers by about ${over.toFixed(1)} points` : `under-covers by about ${(-over).toFixed(1)} points`}, and we report coverage beside width rather than selling the band as precise.`;
+}
+
 export default function TradingDesk() {
   const { data: plan, loading, error } = useApi("/api/plan");
   const { data: bt } = useApi("/api/backtest");
@@ -61,7 +75,7 @@ export default function TradingDesk() {
 
       {quants.length > 0 && (
         <Card title="Price forecast with uncertainty band" style={{ marginTop: 14 }}
-          sub="A censored mixture — the ₹10,000 cap is modelled as an atom rather than smoothed over — with a regime-conditional conformal guard recalibrated on a trailing window. The band widens in the volatile evening peak and tightens overnight, which is real market structure. Measured walk-forward over 47 days it covers 84.6% against an 80% target at ₹1,557/MWh mean width, worst 30 days 80.8%. It still over-covers by roughly four points and we report coverage beside width rather than selling the band as precise.">
+          sub={bandSub(meta)}>
           <FanChart data={quants} xKey="t" height={280} />
         </Card>
       )}

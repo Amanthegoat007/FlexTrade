@@ -125,14 +125,29 @@ code, .mono { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em;
 .badge.off .dot { background: var(--muted); }
 
 .grid { display: grid; gap: 14px; }
-.cols-2 { grid-template-columns: repeat(2, 1fr); }
-.cols-3 { grid-template-columns: repeat(3, 1fr); }
-.cols-4 { grid-template-columns: repeat(4, 1fr); }
-.cols-5 { grid-template-columns: repeat(5, 1fr); }
+/* minmax(0, 1fr), never a bare 1fr. A grid track sized 1fr still carries
+   min-width:auto, so a cell holding a wide table or a long unbroken string
+   refuses to shrink and pushes into the cell beside it — which is what the
+   overlapping cards on Operations and Sizing actually were. minmax(0, ...)
+   lets the track shrink; min-width:0 on the children does the same one level
+   down, because a Card is itself a flex/grid container. */
+.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 /* standalone grid helpers (used bare by Operations/Sizing) */
-.grid2 { display: grid; gap: 14px; grid-template-columns: repeat(2, 1fr); margin-bottom: 14px; }
-.grid3 { display: grid; gap: 14px; grid-template-columns: repeat(3, 1fr); margin-bottom: 14px; }
-.grid4 { display: grid; gap: 14px; grid-template-columns: repeat(4, 1fr); margin-bottom: 14px; }
+.grid2 { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 14px; }
+.grid3 { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; }
+.grid4 { display: grid; gap: 14px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
+.grid > *, .grid2 > *, .grid3 > *, .grid4 > * { min-width: 0; }
+.card { min-width: 0; }
+/* A table is the usual culprit: it will not render narrower than its widest
+   row, so it forces its card wider than the track. 24 of our 41 tables were
+   wrapped in .scroll-x by hand and 17 were not; this makes the behaviour the
+   default rather than something each call site has to remember. display:block
+   with width:max-content keeps the natural column widths and scrolls the
+   overflow instead of pushing it sideways. */
+.card table { display: block; width: max-content; max-width: 100%; overflow-x: auto; }
 @media (max-width: 1000px) {
   .cols-3, .cols-4, .cols-5, .grid3, .grid4 { grid-template-columns: repeat(2, 1fr); }
 }
