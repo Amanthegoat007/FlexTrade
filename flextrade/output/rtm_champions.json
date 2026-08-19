@@ -155,8 +155,8 @@
     "incumbent": "damhat_ratio",
     "val_wape": {
       "model": 26.78,
-      "damhat_flat": 36.09,
-      "damhat_ratio": 35.95,
+      "damhat_flat": 36.38,
+      "damhat_ratio": 36.23,
       "persist": 29.74
     },
     "n_train": 102452,
@@ -198,8 +198,8 @@
       "mae": 1256.856,
       "corr": 0.852,
       "evening_wape": 24.33,
-      "spread_mae": 1353.31,
-      "direction_pct": 67.388
+      "spread_mae": 1365.825,
+      "direction_pct": 67.324
     },
     "model": {
       "wape": 29.892,
@@ -209,18 +209,18 @@
       "mae": 1256.856,
       "corr": 0.852,
       "evening_wape": 24.33,
-      "spread_mae": 1353.31,
-      "direction_pct": 67.388
+      "spread_mae": 1365.825,
+      "direction_pct": 67.324
     },
     "incumbent_scores": {
-      "wape": 34.639,
-      "smape": 44.039,
-      "mape": 91.836,
-      "rmse": 2212.763,
-      "mae": 1456.435,
-      "corr": 0.764,
-      "evening_wape": 23.325,
-      "spread_mae": 1214.787,
+      "wape": 34.749,
+      "smape": 43.889,
+      "mape": 92.725,
+      "rmse": 2254.371,
+      "mae": 1461.057,
+      "corr": 0.76,
+      "evening_wape": 23.164,
+      "spread_mae": 1214.437,
       "direction_pct": 48.061
     }
   }

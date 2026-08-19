@@ -1,12 +1,12 @@
-P10  pinball   153.5 Rs/MWh   PIT  25.0% (nominal 10%)
-P50  pinball   295.5 Rs/MWh   PIT  50.9% (nominal 50%)
-P90  pinball   150.4 Rs/MWh   PIT  91.7% (nominal 90%)
+P10  pinball   157.5 Rs/MWh   PIT  27.0% (nominal 10%)
+P50  pinball   288.8 Rs/MWh   PIT  58.3% (nominal 50%)
+P90  pinball   153.3 Rs/MWh   PIT  93.0% (nominal 90%)
 
-raw P10-P90: 88.0% inside (nominal 80%), mean width Rs 1,695/MWh
-coherence  E[mixture] vs point model: Rs 153/MWh (8.5% of actual)   |   mean-median skew Rs -21/MWh (expected > 0: atom at the cap)
+raw P10-P90: 89.1% inside (nominal 80%), mean width Rs 1,620/MWh
+coherence  E[mixture] vs point model: Rs 150/MWh (9.6% of actual)   |   mean-median skew Rs -51/MWh (expected > 0: atom at the cap)
 
-adaptive regime-conditional band, walk-forward over 47 days:
-  coverage 84.6% (target 80%)   mean width Rs 1,557/MWh   worst 30d 80.8%
-  P(cap) 0.00-0.05  n 2,790  cov 79.4%  m_lo -0.116  m_hi +0.027
-  P(cap) 0.05-0.60  n   469  cov 86.1%  m_lo -0.134  m_hi +0.000
-  P(cap) 0.60-1.01  n 1,253  cov 95.4%  m_lo -0.000  m_hi +0.000
+adaptive regime-conditional band, walk-forward over 43 days:
+  coverage 85.2% (target 80%)   mean width Rs 1,473/MWh   worst 30d 81.7%
+  P(cap) 0.00-0.05  n 2,561  cov 80.6%  m_lo -0.129  m_hi +0.048
+  P(cap) 0.05-0.60  n   365  cov 87.7%  m_lo -0.184  m_hi +0.000
+  P(cap) 0.60-1.01  n 1,202  cov 94.2%  m_lo -0.000  m_hi +0.000

@@ -47,20 +47,20 @@ train 102,452 | val 2,880 | test 3,992   test window 2026-06-15 -> 2026-08-14
 
                WAPE    sMAPE      MAE     RMSE    corr  even.WAPE
 model        29.89%    39.2%    1257    1806   0.852     24.33%
-damhat_flat   34.67%    44.8%    1458    2238   0.764     22.86%
-damhat_ratio   34.64%    44.0%    1456    2213   0.764     23.33%
+damhat_flat   34.77%    44.6%    1462    2282   0.761     22.70%
+damhat_ratio   34.75%    43.9%    1461    2254   0.760     23.16%
 persist      31.29%    43.8%    1316    2189   0.760     29.50%
 dam_oracle   28.85%    37.6%    1213    2070   0.818     18.65%
 
 spread (RTM - DAM) vs the damhat anchor, the trading signal:
-  model        direction  67.4%   spread MAE Rs 1,353/MWh
-  damhat_ratio direction  48.1%   spread MAE Rs 1,215/MWh
-  persist      direction  61.8%   spread MAE Rs 1,503/MWh
+  model        direction  67.3%   spread MAE Rs 1,366/MWh
+  damhat_ratio direction  48.1%   spread MAE Rs 1,214/MWh
+  persist      direction  61.7%   spread MAE Rs 1,493/MWh
   coin flip    direction  50.0%   (blocks scored: 3,094 of 3,992 with |spread| > Rs 100)
 
-CHAMPION (picked on validation): model   val WAPE 26.78%  ->  served test WAPE 29.89%, direction 67.4%
+CHAMPION (picked on validation): model   val WAPE 26.78%  ->  served test WAPE 29.89%, direction 67.3%
 best on test would have been: model (29.89%)  <- selection agreed
-model vs incumbent (damhat_ratio): +13.7% relative
+model vs incumbent (damhat_ratio): +14.0% relative
 WAPE is the headline, not MAPE: RTM clears at Rs 0 on real blocks (1st pct Rs 23),
 so a per-block percentage divides by near-zero and reports nonsense. MAE in Rs/MWh is the
 other honest read -- compare it to the Rs 2,003/MWh standard deviation of the spread itself.

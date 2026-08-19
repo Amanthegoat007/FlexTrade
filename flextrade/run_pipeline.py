@@ -80,6 +80,52 @@ def write_health(stage: str, ok: bool, detail: str = "",
         pass
 
 
+def verify_model_files(fatal: bool = True) -> list[str]:
+    """Load every saved LightGBM artifact and report the ones that will not.
+
+    Exists because the pipeline ran green end-to-end on 19 Aug 2026 while the
+    price model could not be served at all. Sixteen model files were corrupt —
+    price_model, price_cap_clf, all twelve below-cap quantile heads and all
+    three RTM horizons — written the previous evening by TRAINING RUNS THAT
+    OVERLAPPED. Training is single-threaded per process but several processes
+    writing LightGBM artifacts into one directory at once is not safe. Train
+    sequentially.
+
+    Nothing caught it. The audit was green because it refits in memory and
+    never reads these files; every metrics_*.txt was current for the same
+    reason. Only serving loads from disk, so the pipeline can pass every stage
+    and still be unable to produce a bid sheet.
+
+    It has to run in a subprocess. A LightGBM parse failure calls [Fatal] in
+    C++ and aborts the interpreter — it does not raise, so try/except catches
+    nothing and an in-process check reports success right up until the process
+    dies. Absence of output is the only reliable signal.
+    """
+    import subprocess
+    skip = ("metrics_", "backtest_summary", "risk_backtest_summary", "peak_hour")
+    probe = ("import sys,lightgbm as lgb;"
+             "b=lgb.Booster(model_file=sys.argv[1]);print('OK',b.num_trees())")
+    broken = []
+    for f in sorted(OUT.glob("*.txt")):
+        if any(f.name.startswith(k) for k in skip):
+            continue
+        r = subprocess.run([sys.executable, "-c", probe, str(f)],
+                           capture_output=True, text=True, timeout=120)
+        if not r.stdout.startswith("OK"):
+            broken.append(f.name)
+    if broken:
+        msg = (f"{len(broken)} model artifact(s) will not load and CANNOT BE "
+               f"SERVED: {', '.join(broken)}. Retrain them sequentially — "
+               f"overlapping training runs corrupt these files.")
+        write_health("verify-models", False, msg)
+        print(f"  !! {msg}")
+        if fatal:
+            raise SystemExit(1)
+    else:
+        print(f"  model artifacts: {len(list(OUT.glob('*.txt'))) - 0} files scanned, all load")
+    return broken
+
+
 def refresh_live() -> dict:
     status = {}
     # Pull in anything the CI collector captured while this machine was off.
@@ -248,6 +294,13 @@ if __name__ == "__main__":
         stage = "network"
         if not wait_for_network():
             raise RuntimeError("no network after 5 minutes of waiting")
+
+        # Before anything is planned: can the models actually be LOADED?
+        # A corrupt artifact does not fail any training step, any metric file
+        # or the audit — all of those work in memory. It fails only at serve
+        # time, which is after the pipeline has reported success.
+        stage = "verify_models"
+        verify_model_files()
 
         stage = "refresh_live"
         refresh_live()
