@@ -273,6 +273,18 @@ def export_meta():
     # the point is that a reader can see both numbers and which models have
     # been re-measured at all. Silence about the unaudited ones would be the
     # same failure as the single-window headline it replaced.
+    # RTM champions carry the served scores AND the incumbent's, which the
+    # Methodology leaderboard quoted by hand and got two retrains out of date.
+    # Exporting them lets the page derive both sides of the comparison —
+    # important because when the history grew the INCUMBENT improved too, so
+    # refreshing only our own number would have flattered the margin.
+    ch = OUT / "rtm_champions.json"
+    if ch.exists():
+        try:
+            metrics["rtm_champions"] = json.loads(ch.read_text(encoding="utf-8-sig"))
+        except Exception as e:
+            metrics["rtm_champions"] = {"error": f"{type(e).__name__}: {str(e)[:120]}"}
+
     wf = OUT / "walkforward.json"
     if wf.exists():
         try:

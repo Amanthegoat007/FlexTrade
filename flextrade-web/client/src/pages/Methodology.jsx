@@ -177,6 +177,15 @@ function WalkForward({ wf }) {
   );
 }
 
+/* Read RTM scores rather than typing them. The leaderboard quoted 26.6% served
+   against 33.0% for the incumbent long after the RTM history grew from 12.7 to
+   38.6 months and both numbers moved. Refreshing only our own side would have
+   overstated the margin, so both sides are derived from the same export. */
+const rtmNum = (m, side, key, horizon = "intraday") => {
+  const v = m?.rtm_champions?.[horizon]?.[side]?.[key];
+  return v == null ? "—" : `${Number(v).toFixed(1)}%`;
+};
+
 export default function Methodology() {
   const { data: meta, loading, error } = useApi("/api/meta");
   if (loading && !meta) return <Loading error={error} />;
@@ -363,8 +372,10 @@ export default function Methodology() {
                 <span className="mono">intraday horizon</span></td>
               <td>Which way to trade the deviation from a firm DAM position, 48
                 sessions a day</td>
-              <td className="num"><b>21.8% WAPE</b><br />direction <b>75.9%</b></td>
-              <td className="num">28.9% WAPE<br />direction 48.5%</td>
+              <td className="num"><b>{rtmNum(m, "served", "wape")} WAPE</b><br />
+                direction <b>{rtmNum(m, "served", "direction_pct")}</b></td>
+              <td className="num">{rtmNum(m, "incumbent_scores", "wape")} WAPE<br />
+                direction {rtmNum(m, "incumbent_scores", "direction_pct")}</td>
             </tr>
             <tr>
               <td><b>Probabilistic load</b><br />
