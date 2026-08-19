@@ -1,24 +1,6 @@
-Delhi load band (P10-P90, trailing-window CQR)  —  8 rolling origins (30d each), 22,859 blocks, 2025-10-06 -> 2026-06-02
-  interval score 761.9 (proper; width + miss penalty, lower is better)
-  coverage 80.2% mean / 77.7% worst  vs 80.0% nominal   width 526.4
-  origins below nominal: 4/8
-  Kupiec REJECTS correct rate at: 2026-01-04, 2026-02-03, 2026-03-05, 2026-05-04
-  Christoffersen REJECTS independence (failures CLUSTER) at: 2025-10-06, 2025-11-05, 2025-12-05, 2026-01-04, 2026-02-03, 2026-03-05, 2026-04-04, 2026-05-04
-  WAPE %   mean      4.335   worst      5.510   std     0.881
-  MAE      mean    166.397   worst    208.210   std    39.860
-  RMSE     mean    225.683   worst    289.445   std    52.445
-  bias     mean    -69.280   worst   -143.461   std    74.861
-
-Delhi day-ahead peak (LightGBM + validation bias correction)  —  8 rolling origins (30d each), 240 blocks, 2025-10-06 -> 2026-06-02
-  WAPE %   mean      3.803   worst      5.483   std     1.051
-  MAE      mean    185.634   worst    256.667   std    55.185
-  RMSE     mean    239.664   worst    316.952   std    66.092
-  bias     mean    -34.095   worst   -205.205   std   127.009
-  Diebold-Mariano vs benchmark: stat -10.263 p=0.0 -> A
-
-RTM intraday price (vs the hour-ratio incumbent)  —  5 rolling origins (30d each), 12,341 blocks, 2026-03-18 -> 2026-08-14
-  WAPE %   mean     20.481   worst     23.658   std     2.126
-  MAE      mean    827.316   worst    925.445   std    84.650
-  RMSE     mean  1,267.865   worst  1,408.079   std   100.367
-  bias     mean   -241.800   worst   -381.973   std    73.271
-  Diebold-Mariano vs benchmark: stat -27.849 p=0.0 -> A
+DAM day-ahead price (cap-hurdle, vs seasonal naive)  —  6 rolling origins (30d each), 15,477 blocks, 2026-02-21 -> 2026-08-19
+  WAPE %   mean     13.546   worst     15.624   std     1.282
+  MAE      mean    650.550   worst    719.356   std    52.659
+  RMSE     mean  1,144.009   worst  1,256.176   std    99.518
+  bias     mean   -205.659   worst   -394.899   std   110.251
+  Diebold-Mariano vs benchmark: stat -4.124 p=0.0 -> A

@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-19 12:18:28",
+ "generated_at": "2026-08-19 12:25:42",
  "method": "rolling origin, non-overlapping test windows, model refitted at every origin; interval score is Gneiting & Raftery (2007), coverage tests are Kupiec (1995) and Christoffersen (1998)",
  "models": [
   {
@@ -579,6 +579,113 @@
     }
    ],
    "key": "rtm"
+  },
+  {
+   "model": "DAM day-ahead price (cap-hurdle, vs seasonal naive)",
+   "unit": "Rs/MWh",
+   "origins_run": 6,
+   "test_days": 30,
+   "window": "2026-02-21 -> 2026-08-19",
+   "blocks": 15477,
+   "wape_pct": {
+    "mean": 13.546,
+    "worst": 15.624,
+    "best": 11.392,
+    "std": 1.282
+   },
+   "mae": {
+    "mean": 650.55,
+    "worst": 719.356,
+    "best": 582.005,
+    "std": 52.659
+   },
+   "rmse": {
+    "mean": 1144.009,
+    "worst": 1256.176,
+    "best": 986.042,
+    "std": 99.518
+   },
+   "bias": {
+    "mean": -205.659,
+    "worst": -394.899,
+    "best": 71.164,
+    "std": 110.251
+   },
+   "vs_benchmark": {
+    "n": 14826,
+    "stat": -4.124,
+    "p_value": 0.0,
+    "better": "A"
+   },
+   "origins": [
+    {
+     "test_start": "2026-02-21",
+     "test_end": "2026-03-22",
+     "n": 2805,
+     "mae": 588.3979813511078,
+     "rmse": 1045.7717646647568,
+     "wape_pct": 13.86052779234183,
+     "bias": -98.01522208302599,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": NaN
+    },
+    {
+     "test_start": "2026-03-23",
+     "test_end": "2026-04-21",
+     "n": 2880,
+     "mae": 699.4501271407939,
+     "rmse": 1245.145225072387,
+     "wape_pct": 15.624126964036037,
+     "bias": -273.84595587982557,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": 15.735422941575985
+    },
+    {
+     "test_start": "2026-04-22",
+     "test_end": "2026-05-21",
+     "n": 2880,
+     "mae": 582.0051107868992,
+     "rmse": 986.0421209602916,
+     "wape_pct": 11.391721022729733,
+     "bias": -234.60585924189115,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": 11.748254584906569
+    },
+    {
+     "test_start": "2026-05-22",
+     "test_end": "2026-06-20",
+     "n": 2880,
+     "mae": 719.356125468961,
+     "rmse": 1188.7907391678334,
+     "wape_pct": 13.971898507739075,
+     "bias": -394.89926977252213,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": 13.340570082740532
+    },
+    {
+     "test_start": "2026-06-21",
+     "test_end": "2026-07-20",
+     "n": 2592,
+     "mae": 677.8614686627299,
+     "rmse": 1256.1757589910833,
+     "wape_pct": 13.661953687752781,
+     "bias": -161.42559542685024,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": NaN
+    },
+    {
+     "test_start": "2026-07-21",
+     "test_end": "2026-08-19",
+     "n": 1440,
+     "mae": 636.22761408796,
+     "rmse": 1142.1289423852631,
+     "wape_pct": 12.763571245872305,
+     "bias": -71.16436609389335,
+     "unit": "Rs/MWh",
+     "benchmark_wape_pct": NaN
+    }
+   ],
+   "key": "price"
   }
  ]
 }

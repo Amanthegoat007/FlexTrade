@@ -345,7 +345,8 @@ SPECS = {
         min_train_days=150, n_origins=5),
 }
 
-INDEX_FOR = {"load_band": _panel, "peak": _peak_frame, "rtm": _rtm}
+INDEX_FOR = {"load_band": _panel, "peak": _peak_frame, "rtm": _rtm,
+             "price": _price_frame}
 
 
 def main(which: str = "all", n_origins: int = 8, test_days: int = 30):
