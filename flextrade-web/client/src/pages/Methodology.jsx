@@ -414,8 +414,8 @@ export default function Methodology() {
       <p>
         <b>MAPE is the wrong instrument wherever the target approaches zero,</b>{" "}
         and RTM does: it clears at ₹0 on real blocks and its 1st percentile is
-        ₹23. The same intraday forecast scores <b>65% by MAPE and 26.6% by
-        WAPE</b> — the difference is entirely a handful of cheap night blocks in
+        ₹23. The same intraday forecast scores <b>{rtmNum(m, "served", "mape")} by
+        MAPE and {rtmNum(m, "served", "wape")} by WAPE</b> — the difference is entirely a handful of cheap night blocks in
         the denominator. So prices are reported as WAPE (Σ|error| ÷ Σ|actual|,
         which is what a trading desk means by "how far off were we"), and the
         state exchange target as sMAPE, which is bounded at 200%. This is the
