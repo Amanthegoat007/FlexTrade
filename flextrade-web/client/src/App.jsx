@@ -9,6 +9,7 @@ import Operations from "./pages/Operations";
 import Overview from "./pages/Overview";
 import Renewables from "./pages/Renewables";
 import Roadmap from "./pages/Roadmap";
+import Landing from "./pages/Landing";
 import Reserves from "./pages/Reserves";
 import Sizing from "./pages/Sizing";
 import Solutions from "./pages/Solutions";
@@ -19,8 +20,9 @@ import TradingDesk from "./pages/TradingDesk";
 // grouped sidebar — reads as a full SaaS product, not a flat link list.
 // [path, icon, label, tag?]
 const NAV = [
+  ["/", "◆", "Home"],
   ["group", "Monitor"],
-  ["/", "◉", "Live Overview"],
+  ["/overview", "◉", "Live Overview"],
   ["/states", "🗺", "Multi-State India", "23"],
   ["/state", "◎", "State Workspace"],
   ["/forecasts", "◍", "Forecast Lab", "4"],
@@ -105,7 +107,8 @@ export default function App() {
         <div className="content">
           <HealthBanner health={meta?.health} />
           <Routes>
-            <Route path="/" element={<Overview />} />
+            <Route path="/" element={<Landing />} />
+            <Route path="/overview" element={<Overview />} />
             <Route path="/trading" element={<TradingDesk />} />
             <Route path="/operations" element={<Operations />} />
             <Route path="/sizing" element={<Sizing />} />
